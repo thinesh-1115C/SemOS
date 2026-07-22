@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FirstTimeOnboardingCard } from './FirstTimeOnboardingCard';
 import { 
   UserProfile, Subject, NoteItem, Flashcard, Quiz, CalendarEvent, 
   StudyAnalyticsData 
@@ -17,9 +18,11 @@ interface DashboardProps {
   quizzes: Quiz[];
   events: CalendarEvent[];
   analytics: StudyAnalyticsData;
+  authUid?: string | null;
   setActiveView: (view: string) => void;
   setActiveSubjectId: (id: string | null) => void;
   onOpenAddSubject: () => void;
+  onLoadSampleData?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -30,9 +33,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   quizzes,
   events,
   analytics,
+  authUid,
   setActiveView,
   setActiveSubjectId,
   onOpenAddSubject,
+  onLoadSampleData,
 }) => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -268,8 +273,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {subjects.map((subject) => {
+            {subjects.length === 0 ? (
+              <FirstTimeOnboardingCard
+                userName={user.name}
+                authUid={authUid}
+                onOpenAddSubject={onOpenAddSubject}
+                onOpenTimetable={() => setActiveView('timetable')}
+                onLoadSampleData={onLoadSampleData || (() => {})}
+              />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {subjects.map((subject) => {
                 const SubjectIcon = getSubjectIcon(subject.icon);
                 return (
                   <div
@@ -326,7 +340,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 );
               })}
             </div>
-          </div>
+          )}
+        </div>
 
         </div>
 

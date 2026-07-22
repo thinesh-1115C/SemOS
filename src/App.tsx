@@ -17,6 +17,9 @@ import { AnalyticsView } from './components/AnalyticsView';
 import { TimetableAttendanceView } from './components/TimetableAttendanceView';
 import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { AuthModal } from './components/AuthModal';
+import { AccessRestrictedModal } from './components/AccessRestrictedModal';
+import { AdminAllowlistModal } from './components/AdminAllowlistModal';
+import { FirstTimeOnboardingCard } from './components/FirstTimeOnboardingCard';
 
 import { 
   UserProfile, Subject, NoteItem, PDFDocument, Flashcard, Quiz, 
@@ -32,10 +35,11 @@ import {
 } from './data/initialData';
 
 import { generateRevisionTasksForSession, triggerSpacedRepetition } from './lib/revisionAlgorithm';
+import { isEmailAllowed } from './lib/authGuard';
 
 import { 
   subscribeToAuthChanges, getUserProfile, 
-  getUserRevisionTasks, saveUserRevisionTasksBatch, updateUserRevisionTask 
+  getUserRevisionTasks, saveUserRevisionTasksBatch, updateUserRevisionTask, logOut 
 } from './lib/firebase';
 
 export default function App() {
@@ -52,6 +56,9 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
+  const [isAccessRestrictedOpen, setIsAccessRestrictedOpen] = useState(false);
+  const [isAdminAllowlistOpen, setIsAdminAllowlistOpen] = useState(false);
+  const [unauthorizedAttemptEmail, setUnauthorizedAttemptEmail] = useState<string | null>(null);
 
   // New Subject Form State
   const [newSubName, setNewSubName] = useState('');
@@ -137,6 +144,16 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = subscribeToAuthChanges(async (fbUser) => {
       if (fbUser) {
+        // Intercept and check allowlist if enabled
+        if (!isEmailAllowed(fbUser.email)) {
+          setUnauthorizedAttemptEmail(fbUser.email);
+          setIsAccessRestrictedOpen(true);
+          await logOut();
+          setAuthUid(null);
+          setAuthEmail(null);
+          return;
+        }
+
         setAuthUid(fbUser.uid);
         setAuthEmail(fbUser.email);
         setUser(prev => ({
@@ -277,6 +294,16 @@ export default function App() {
 
   const handleToggleEventComplete = (id: string) => {
     setEvents(prev => prev.map(e => e.id === id ? { ...e, completed: !e.completed } : e));
+  };
+
+  const handleLoadSampleData = () => {
+    setSubjects(initialSubjects);
+    setTimetableSlots(initialTimetableSlots);
+    setAttendanceLogs(initialAttendanceLogs);
+    setRevisionTasks(initialRevisionTasks);
+    setNotes(initialNotes);
+    setFlashcards(initialFlashcards);
+    setQuizzes(initialQuizzes);
   };
 
   const handleAddSubject = () => {
@@ -494,9 +521,11 @@ export default function App() {
                 quizzes={quizzes}
                 events={events}
                 analytics={analytics}
+                authUid={authUid}
                 setActiveView={handleSelectNavView}
                 setActiveSubjectId={setActiveSubjectId}
                 onOpenAddSubject={() => setIsAddSubjectOpen(true)}
+                onLoadSampleData={handleLoadSampleData}
               />
             )}
 
@@ -634,6 +663,19 @@ export default function App() {
         authUid={authUid}
         authEmail={authEmail}
         requiredMessage={authRequiredMsg}
+        onOpenAdmin={() => setIsAdminAllowlistOpen(true)}
+      />
+
+      <AccessRestrictedModal
+        isOpen={isAccessRestrictedOpen}
+        onClose={() => setIsAccessRestrictedOpen(false)}
+        attemptedEmail={unauthorizedAttemptEmail}
+        onOpenAdmin={() => setIsAdminAllowlistOpen(true)}
+      />
+
+      <AdminAllowlistModal
+        isOpen={isAdminAllowlistOpen}
+        onClose={() => setIsAdminAllowlistOpen(false)}
       />
 
       {/* Add New Subject Modal */}

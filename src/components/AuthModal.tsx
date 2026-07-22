@@ -11,6 +11,8 @@ interface AuthModalProps {
   authUid?: string | null;
   authEmail?: string | null;
   onAuthSuccess?: (user: any) => void;
+  onUnauthorizedAttempt?: (email: string) => void;
+  onOpenAdmin?: () => void;
   requiredMessage?: string | null;
 }
 
@@ -22,6 +24,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   authUid,
   authEmail,
   onAuthSuccess,
+  onUnauthorizedAttempt,
+  onOpenAdmin,
   requiredMessage,
 }) => {
   const [tab, setTab] = useState<'signin' | 'signup' | 'profile'>((authUid ? 'profile' : 'signin'));
@@ -356,6 +360,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             >
               <LogOut className="w-4 h-4" />
               <span>Sign Out of Firebase</span>
+            </button>
+          </div>
+        )}
+
+        {/* Admin Whitelist Manager Trigger */}
+        {onOpenAdmin && (
+          <div className="pt-2 border-t border-[#EAE7E0] flex items-center justify-between text-xs">
+            <span className="text-zinc-500 text-[11px]">Admin or Invite Settings?</span>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenAdmin();
+              }}
+              className="text-[#A68942] font-bold hover:underline flex items-center gap-1"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Authorization Guard</span>
             </button>
           </div>
         )}
