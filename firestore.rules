@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User profile and user subcollections
+    match /users/{userId} {
+      allow get, write, delete: if isOwner(userId);
+      allow list: if false;
+
+      match /studyPlans/{planId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+
+      match /documents/{docId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+
+      match /academic/{docId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+
+      match /revisionTasks/{taskId} {
+        allow read, write, delete: if isOwner(userId);
+      }
+    }
+  }
+}

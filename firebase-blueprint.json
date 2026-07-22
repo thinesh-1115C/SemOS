@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "semester": { "type": "string" },
+        "major": { "type": "string" },
+        "targetGpa": { "type": "number" },
+        "currentCgpa": { "type": "number" },
+        "targetCgpa": { "type": "number" },
+        "rigorLevel": { "type": "string" }
+      },
+      "required": ["uid"]
+    },
+    "StudyPlan": {
+      "title": "StudyPlan",
+      "description": "User study plan",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" }
+      }
+    },
+    "UserDocument": {
+      "title": "UserDocument",
+      "description": "User uploaded or generated document",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "content": { "type": "string" }
+      }
+    },
+    "CgpaRecord": {
+      "title": "CgpaRecord",
+      "description": "User academic CGPA record",
+      "type": "object",
+      "properties": {
+        "currentSgpa": { "type": "number" },
+        "overallCgpa": { "type": "number" },
+        "targetCgpa": { "type": "number" }
+      }
+    },
+    "RevisionTask": {
+      "title": "RevisionTask",
+      "description": "Spaced repetition revision task linked to completed study session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sourceSessionId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "subjectCode": { "type": "string" },
+        "topic": { "type": "string" },
+        "completionDate": { "type": "string" },
+        "dayInterval": { "type": "number" },
+        "scheduledDate": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["sourceSessionId", "subjectId", "topic", "dayInterval", "scheduledDate"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Main user profile document"
+    },
+    "/users/{userId}/studyPlans/{planId}": {
+      "schema": "StudyPlan",
+      "description": "User study plans subcollection"
+    },
+    "/users/{userId}/documents/{docId}": {
+      "schema": "UserDocument",
+      "description": "User documents subcollection"
+    },
+    "/users/{userId}/academic/{docId}": {
+      "schema": "CgpaRecord",
+      "description": "User academic subcollection"
+    },
+    "/users/{userId}/revisionTasks/{taskId}": {
+      "schema": "RevisionTask",
+      "description": "User auto-generated spaced repetition revision tasks"
+    }
+  }
+}

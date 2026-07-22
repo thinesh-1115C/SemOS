@@ -1,0 +1,6 @@
+{
+  "name": "SemOS",
+  "description": "Your AI-Powered Academic Operating System — learn, organize, revise, track progress, collaborate, and plan your academic life.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
