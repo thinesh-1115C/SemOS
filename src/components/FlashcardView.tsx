@@ -125,9 +125,13 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
                 onChange={(e) => setGenSubjectId(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold"
               >
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name.split('(')[0]}</option>
-                ))}
+                {subjects.length === 0 ? (
+                  <option value="">General Deck</option>
+                ) : (
+                  subjects.map((s) => (
+                    <option key={s.id} value={s.id}>{(s?.name || '').split('(')[0]}</option>
+                  ))
+                )}
               </select>
             </div>
             <div>
@@ -186,7 +190,7 @@ export const FlashcardView: React.FC<FlashcardViewProps> = ({
           >
             <option value="all">All Subjects Deck ({flashcards.length})</option>
             {subjects.map((s) => (
-              <option key={s.id} value={s.id}>{s.code} - {s.name.split('(')[0]}</option>
+              <option key={s.id} value={s.id}>{s.code} - {(s?.name || '').split('(')[0]}</option>
             ))}
           </select>
         </div>

@@ -1,21 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Subject, TutorMode, AIChatMessage, UserProfile } from '../types';
+import { Subject, TutorMode, AIChatMessage, UserProfile, PDFDocument } from '../types';
 import { 
   Bot, Sparkles, Send, BookOpen, Brain, Award, HelpCircle, 
-  Lightbulb, Zap, Upload, FileText, CheckCircle2, X, Download, ChevronDown, Trash2
+  Lightbulb, Zap, Upload, FileText, CheckCircle2, X, Download, ChevronDown, Trash2, Folder
 } from 'lucide-react';
 import { FormattedMessage } from './FormattedMessage';
 import { exportChatHistoryToPDF, exportChatHistoryToWord } from '../lib/exportUtils';
+import { FileLibraryModal } from './FileLibraryModal';
 
 interface AITutorViewProps {
   subjects: Subject[];
+  pdfs: PDFDocument[];
+  onAddPdf: (pdf: Omit<PDFDocument, 'id' | 'uploadDate'>) => PDFDocument | void;
+  onDeletePdf?: (pdfId: string) => void;
   user?: UserProfile;
   initialSubjectId?: string;
 }
 
-export const AITutorView: React.FC<AITutorViewProps> = ({ subjects, user, initialSubjectId }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+export const AITutorView: React.FC<AITutorViewProps> = ({ 
+  subjects, 
+  pdfs,
+  onAddPdf,
+  onDeletePdf,
+  user, 
+  initialSubjectId 
+}) => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(
     initialSubjectId || subjects[0]?.id || ''
   );
@@ -24,7 +33,8 @@ export const AITutorView: React.FC<AITutorViewProps> = ({ subjects, user, initia
   const [loading, setLoading] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
 
-  // Document Upload State
+  // Document Library Modal State
+  const [isFileLibraryOpen, setIsFileLibraryOpen] = useState(false);
   const [attachedDocName, setAttachedDocName] = useState<string | null>(null);
   const [attachedDocText, setAttachedDocText] = useState<string>('');
   const [isUploadingDoc, setIsUploadingDoc] = useState<boolean>(false);
@@ -176,7 +186,7 @@ export const AITutorView: React.FC<AITutorViewProps> = ({ subjects, user, initia
               SemOS AI Tutor Hub
             </h1>
             <p className="text-xs text-zinc-600">
-              6 Pedagogical Modes • Indian CGPA ({user?.targetGpa || 9.0} Target) • LaTeX & Code Sandbox
+              6 Pedagogical Modes • LaTeX & Code Sandbox
             </p>
           </div>
         </div>
@@ -190,11 +200,15 @@ export const AITutorView: React.FC<AITutorViewProps> = ({ subjects, user, initia
               onChange={(e) => setSelectedSubjectId(e.target.value)}
               className="px-3 py-2 rounded-xl bg-[#FBFBF9] border border-[#EAE7E0] text-[#1A1A1A] text-xs font-semibold focus:outline-none focus:border-[#A68942]"
             >
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.code} - {(s?.name || '').split('(')[0]?.trim() || s.code}
-                </option>
-              ))}
+              {subjects.length === 0 ? (
+                <option value="">General AI Tutor</option>
+              ) : (
+                subjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} - {(s?.name || '').split('(')[0]?.trim() || s.code}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
@@ -365,22 +379,14 @@ export const AITutorView: React.FC<AITutorViewProps> = ({ subjects, user, initia
         {/* Input Controls */}
         <div className="pt-3 border-t border-[#EAE7E0] flex items-center gap-2">
           
-          <input 
-            type="file"
-            ref={fileInputRef}
-            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-            accept=".pdf,.ppt,.pptx,.txt"
-            className="hidden"
-          />
-
           <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploadingDoc}
+            onClick={() => setIsFileLibraryOpen(true)}
             className="p-3 rounded-2xl bg-[#F6F4F0] hover:bg-[#EAE7E0] border border-[#EAE7E0] text-zinc-700 text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
-            title="Attach PDF or PPT slide deck"
+            title="Attach file from Inbuilt Library or Upload"
+            id="open-file-library-btn"
           >
-            <Upload className="w-4 h-4 text-[#A68942]" />
-            <span className="hidden sm:inline">Attach Doc</span>
+            <Folder className="w-4 h-4 text-[#A68942]" />
+            <span className="hidden sm:inline">File Library</span>
           </button>
 
           <input
@@ -405,6 +411,23 @@ export const AITutorView: React.FC<AITutorViewProps> = ({ subjects, user, initia
         </div>
 
       </div>
+
+      {/* File Library Modal */}
+      <FileLibraryModal
+        isOpen={isFileLibraryOpen}
+        onClose={() => setIsFileLibraryOpen(false)}
+        pdfs={pdfs}
+        subjects={subjects}
+        onSelectPdf={(pdf) => {
+          setAttachedDocName(pdf.title);
+          setAttachedDocText(pdf.extractedText || pdf.summary || '');
+        }}
+        onAddPdf={onAddPdf}
+        onDeletePdf={onDeletePdf}
+        title="Attach Document to AI Tutor"
+        subtitle="Select from previously uploaded study materials or upload a new file from your device"
+        actionLabel="Attach to Chat"
+      />
 
     </div>
   );

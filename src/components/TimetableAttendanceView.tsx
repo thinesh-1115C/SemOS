@@ -685,9 +685,13 @@ export const TimetableAttendanceView: React.FC<TimetableAttendanceViewProps> = (
                   onChange={(e) => setNewSlot({ ...newSlot, subjectId: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl bg-[#F6F4F0] border border-[#EAE7E0] text-[#1A1A1A] font-medium focus:outline-none focus:border-[#A68942]"
                 >
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
-                  ))}
+                  {subjects.length === 0 ? (
+                    <option value="">General Class</option>
+                  ) : (
+                    subjects.map((s) => (
+                      <option key={s.id} value={s.id}>{s.code} - {(s?.name || '')}</option>
+                    ))
+                  )}
                 </select>
               </div>
 

@@ -5,12 +5,7 @@
  */
 
 // Initial default approved emails (can be updated via Admin Panel or LocalStorage)
-const DEFAULT_ALLOWED_EMAILS = [
-  'thinesh10048@gmail.com',
-  'student@university.edu',
-  'admin@semos.app',
-  'demo@university.edu'
-];
+const DEFAULT_ALLOWED_EMAILS: string[] = [];
 
 const STORAGE_KEY_ALLOWED_EMAILS = 'semos_allowed_emails';
 const STORAGE_KEY_ALLOWLIST_ENABLED = 'semos_allowlist_enabled';

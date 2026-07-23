@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   BookOpen, Search, Bell, Sparkles, Flame, Trophy, 
   ChevronDown, User, LogOut, CheckCircle2, Calendar,
-  ArrowRight
+  ArrowRight, Trash2, RotateCcw
 } from 'lucide-react';
 import { UserProfile, NotificationItem } from '../types';
 
@@ -14,6 +14,7 @@ interface NavbarProps {
   onOpenAuth: () => void;
   notifications: NotificationItem[];
   onMarkNotificationsRead: () => void;
+  authUid?: string | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -24,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuth,
   notifications,
   onMarkNotificationsRead,
+  authUid,
 }) => {
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -37,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Brand Logo & Name */}
         <div className="flex items-center gap-3">
           <button 
-            onClick={() => setActiveView('dashboard')}
+            onClick={() => setActiveView('homepage')}
             className="flex items-center gap-2.5 group focus:outline-none"
             id="semos-logo-btn"
           >
@@ -88,11 +90,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Landing / App Toggle Button */}
           {activeView === 'homepage' ? (
             <button
-              onClick={() => setActiveView('dashboard')}
+              onClick={() => {
+                if (authUid) {
+                  setActiveView('dashboard');
+                } else {
+                  onOpenAuth();
+                }
+              }}
               className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#1A1A1A] hover:bg-[#333333] text-[#FBFBF9] text-xs font-semibold shadow-sm transition-all"
               id="launch-app-nav-btn"
             >
-              <span>Launch App</span>
+              <span>{authUid ? 'Launch Workspace' : 'Sign In / Register'}</span>
               <ArrowRight className="w-3.5 h-3.5 text-[#A68942]" />
             </button>
           ) : (
@@ -179,7 +187,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               id="user-profile-menu-btn"
             >
               <img
-                src={user.avatar}
+                src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250'}
                 alt={user.name}
                 className="w-8 h-8 rounded-lg object-cover ring-2 ring-[#A68942]/40"
               />
@@ -189,7 +197,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {showProfileDropdown && (
               <div className="absolute right-0 mt-2 w-64 bg-[#FBFBF9] border border-[#EAE7E0] rounded-2xl shadow-xl z-50 p-3 text-xs text-[#1A1A1A]">
                 <div className="flex items-center gap-3 pb-3 mb-2 border-b border-[#EAE7E0]">
-                  <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-xl object-cover ring-2 ring-[#A68942]" />
+                  <img src={user.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250'} alt={user.name} className="w-10 h-10 rounded-xl object-cover ring-2 ring-[#A68942]" />
                   <div className="overflow-hidden">
                     <p className="font-bold text-[#1A1A1A] truncate">{user.name}</p>
                     <p className="text-[11px] text-zinc-500 truncate">{user.email}</p>

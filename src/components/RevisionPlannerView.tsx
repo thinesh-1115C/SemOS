@@ -261,7 +261,7 @@ export const RevisionPlannerView: React.FC<RevisionPlannerViewProps> = ({
           >
             <option value="all">All Subjects</option>
             {subjects.map((s) => (
-              <option key={s.id} value={s.id}>{s.code} – {s.name}</option>
+              <option key={s.id} value={s.id}>{s.code} – {(s?.name || '')}</option>
             ))}
           </select>
 
@@ -661,9 +661,13 @@ export const RevisionPlannerView: React.FC<RevisionPlannerViewProps> = ({
                   onChange={(e) => setNewSubjectId(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-[#F6F4F0] border border-[#EAE7E0] text-[#1A1A1A] focus:outline-none focus:border-[#A68942]"
                 >
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>{s.code} – {s.name}</option>
-                  ))}
+                  {subjects.length === 0 ? (
+                    <option value="">General Subject</option>
+                  ) : (
+                    subjects.map((s) => (
+                      <option key={s.id} value={s.id}>{s.code} – {(s?.name || '')}</option>
+                    ))
+                  )}
                 </select>
               </div>
 

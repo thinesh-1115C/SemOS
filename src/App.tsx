@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { Homepage } from './components/Homepage';
@@ -6,7 +6,6 @@ import { Dashboard } from './components/Dashboard';
 import { SubjectWorkspace } from './components/SubjectWorkspace';
 import { AITutorView } from './components/AITutorView';
 import { StudyPlannerView } from './components/StudyPlannerView';
-import { CgpaCalculator } from './components/CgpaCalculator';
 import { FlashcardView } from './components/FlashcardView';
 import { QuizView } from './components/QuizView';
 import { PDFBrainView } from './components/PDFBrainView';
@@ -28,13 +27,8 @@ import {
 } from './types';
 
 import { 
-  initialUser, initialSubjects, initialNotes, initialPDFs, 
-  initialFlashcards, initialQuizzes, initialAssignments, 
-  initialEvents, initialAnalytics, initialNotifications,
-  initialTimetableSlots, initialAttendanceLogs, initialRevisionTasks
-} from './data/initialData';
-
-import { generateRevisionTasksForSession, triggerSpacedRepetition } from './lib/revisionAlgorithm';
+  generateRevisionTasksForSession, triggerSpacedRepetition 
+} from './lib/revisionAlgorithm';
 import { isEmailAllowed } from './lib/authGuard';
 
 import { 
@@ -43,8 +37,8 @@ import {
 } from './lib/firebase';
 
 export default function App() {
-  // Navigation & View state
-  const [activeView, setActiveView] = useState<string>('dashboard');
+  // Navigation & View state (Defaults to landing homepage view for incoming visitors)
+  const [activeView, setActiveView] = useState<string>('homepage');
   const [activeSubjectId, setActiveSubjectId] = useState<string | null>(null);
 
   // Firebase Auth State
@@ -65,68 +59,131 @@ export default function App() {
   const [newSubCode, setNewSubCode] = useState('');
   const [newSubInstructor, setNewSubInstructor] = useState('');
 
-  // Persistent App State with localStorage fallback
+  // Helper to parse stored state while discarding legacy sample/demo data
+  const getStoredClean = <T,>(key: string, fallback: T): T => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (!saved) return fallback;
+      if (
+        saved.includes('sub_math') || 
+        saved.includes('Alex Rivera') || 
+        saved.includes('MATH301') || 
+        saved.includes('CS301') ||
+        saved.includes('thinesh')
+      ) {
+        localStorage.removeItem(key);
+        return fallback;
+      }
+      return JSON.parse(saved);
+    } catch {
+      return fallback;
+    }
+  };
+
+  // Persistent App State with localStorage fallback (Defaults to empty for clean multi-tenant start)
   const [user, setUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('semos_user');
-    return saved ? JSON.parse(saved) : initialUser;
+    return getStoredClean('semos_user', {
+      id: 'usr_new',
+      name: 'Student Workspace',
+      email: '',
+      avatar: '',
+      major: 'Academic Studies',
+      semester: 'Semester 1',
+      targetGpa: 4.0,
+      xp: 0,
+      level: 1,
+      streakDays: 0,
+      lastStudyDate: new Date().toISOString().split('T')[0],
+      badges: []
+    });
   });
 
-  const [subjects, setSubjects] = useState<Subject[]>(() => {
-    const saved = localStorage.getItem('semos_subjects');
-    return saved ? JSON.parse(saved) : initialSubjects;
+  const [subjects, setSubjects] = useState<Subject[]>(() => getStoredClean('semos_subjects', []));
+  const [notes, setNotes] = useState<NoteItem[]>(() => getStoredClean('semos_notes', []));
+  const [pdfs, setPdfs] = useState<PDFDocument[]>(() => getStoredClean('semos_pdfs', []));
+  const [flashcards, setFlashcards] = useState<Flashcard[]>(() => getStoredClean('semos_flashcards', []));
+  const [quizzes, setQuizzes] = useState<Quiz[]>(() => getStoredClean('semos_quizzes', []));
+  const [assignments, setAssignments] = useState<AssignmentTask[]>(() => getStoredClean('semos_assignments', []));
+  const [events, setEvents] = useState<CalendarEvent[]>(() => getStoredClean('semos_events', []));
+
+  const [analytics] = useState<StudyAnalyticsData>({
+    dailyHours: [
+      { day: 'Mon', hours: 0, target: 4.0 },
+      { day: 'Tue', hours: 0, target: 4.0 },
+      { day: 'Wed', hours: 0, target: 4.0 },
+      { day: 'Thu', hours: 0, target: 4.0 },
+      { day: 'Fri', hours: 0, target: 4.0 },
+      { day: 'Sat', hours: 0, target: 4.0 },
+      { day: 'Sun', hours: 0, target: 4.0 },
+    ],
+    subjectMastery: [],
+    quizAccuracy: [],
+    forgettingCurve: [],
   });
 
-  const [notes, setNotes] = useState<NoteItem[]>(() => {
-    const saved = localStorage.getItem('semos_notes');
-    return saved ? JSON.parse(saved) : initialNotes;
-  });
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => getStoredClean('semos_notifications', []));
+  const [timetableSlots, setTimetableSlots] = useState<TimetableSlot[]>(() => getStoredClean('semos_timetable_slots', []));
+  const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLog[]>(() => getStoredClean('semos_attendance_logs', []));
+  const [revisionTasks, setRevisionTasks] = useState<RevisionTask[]>(() => getStoredClean('semos_revision_tasks', []));
 
-  const [pdfs, setPdfs] = useState<PDFDocument[]>(() => {
-    const saved = localStorage.getItem('semos_pdfs');
-    return saved ? JSON.parse(saved) : initialPDFs;
-  });
+  // Robust state reset mechanism that purges local storage and flushes states immediately
+  const handleRefreshWorkspace = useCallback(() => {
+    const keysToPurge = [
+      'semos_user', 'semos_subjects', 'semos_notes', 'semos_pdfs', 'semos_flashcards',
+      'semos_quizzes', 'semos_assignments', 'semos_events', 'semos_timetable_slots',
+      'semos_attendance_logs', 'semos_revision_tasks', 'semos_notifications'
+    ];
+    for (const key of keysToPurge) {
+      localStorage.removeItem(key);
+    }
+    // Set explicit fresh empty values across all reactive states to force immediate re-render
+    setUser({
+      id: 'usr_new',
+      name: 'Student Workspace',
+      email: '',
+      avatar: '',
+      major: 'Academic Studies',
+      semester: 'Semester 1',
+      targetGpa: 4.0,
+      xp: 0,
+      level: 1,
+      streakDays: 0,
+      lastStudyDate: new Date().toISOString().split('T')[0],
+      badges: []
+    });
+    setSubjects([]);
+    setNotes([]);
+    setPdfs([]);
+    setFlashcards([]);
+    setQuizzes([]);
+    setAssignments([]);
+    setEvents([]);
+    setTimetableSlots([]);
+    setAttendanceLogs([]);
+    setRevisionTasks([]);
+    setNotifications([]);
+    setActiveSubjectId(null);
+  }, []);
 
-  const [flashcards, setFlashcards] = useState<Flashcard[]>(() => {
-    const saved = localStorage.getItem('semos_flashcards');
-    return saved ? JSON.parse(saved) : initialFlashcards;
-  });
-
-  const [quizzes, setQuizzes] = useState<Quiz[]>(() => {
-    const saved = localStorage.getItem('semos_quizzes');
-    return saved ? JSON.parse(saved) : initialQuizzes;
-  });
-
-  const [assignments, setAssignments] = useState<AssignmentTask[]>(() => {
-    const saved = localStorage.getItem('semos_assignments');
-    return saved ? JSON.parse(saved) : initialAssignments;
-  });
-
-  const [events, setEvents] = useState<CalendarEvent[]>(() => {
-    const saved = localStorage.getItem('semos_events');
-    return saved ? JSON.parse(saved) : initialEvents;
-  });
-
-  const [analytics] = useState<StudyAnalyticsData>(initialAnalytics);
-
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const saved = localStorage.getItem('semos_notifications');
-    return saved ? JSON.parse(saved) : initialNotifications;
-  });
-
-  const [timetableSlots, setTimetableSlots] = useState<TimetableSlot[]>(() => {
-    const saved = localStorage.getItem('semos_timetable_slots');
-    return saved ? JSON.parse(saved) : initialTimetableSlots;
-  });
-
-  const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLog[]>(() => {
-    const saved = localStorage.getItem('semos_attendance_logs');
-    return saved ? JSON.parse(saved) : initialAttendanceLogs;
-  });
-
-  const [revisionTasks, setRevisionTasks] = useState<RevisionTask[]>(() => {
-    const saved = localStorage.getItem('semos_revision_tasks');
-    return saved ? JSON.parse(saved) : initialRevisionTasks;
-  });
+  // useEffect hook checking for stale or pre-defined data with robust state reset mechanism
+  useEffect(() => {
+    const keysToCheck = [
+      'semos_user', 'semos_subjects', 'semos_notes', 'semos_pdfs', 'semos_flashcards',
+      'semos_quizzes', 'semos_assignments', 'semos_events', 'semos_timetable_slots',
+      'semos_attendance_logs', 'semos_revision_tasks'
+    ];
+    let foundStale = false;
+    for (const k of keysToCheck) {
+      const val = localStorage.getItem(k);
+      if (val && (val.includes('sub_math') || val.includes('Alex Rivera') || val.includes('MATH301'))) {
+        localStorage.removeItem(k);
+        foundStale = true;
+      }
+    }
+    if (foundStale) {
+      handleRefreshWorkspace();
+    }
+  }, [handleRefreshWorkspace]);
 
   useEffect(() => {
     localStorage.setItem('semos_timetable_slots', JSON.stringify(timetableSlots));
@@ -151,6 +208,7 @@ export default function App() {
           await logOut();
           setAuthUid(null);
           setAuthEmail(null);
+          setActiveView('homepage');
           return;
         }
 
@@ -181,6 +239,7 @@ export default function App() {
       } else {
         setAuthUid(null);
         setAuthEmail(null);
+        setActiveView('homepage');
       }
     });
 
@@ -198,12 +257,15 @@ export default function App() {
   useEffect(() => { localStorage.setItem('semos_events', JSON.stringify(events)); }, [events]);
   useEffect(() => { localStorage.setItem('semos_notifications', JSON.stringify(notifications)); }, [notifications]);
 
-  // Protected Route Check Handler
+  // Protected Route Check Handler: Requires authentication for all workspace views
   const handleSelectNavView = (view: string) => {
-    // Restrict AI Tutor, AI Study Planner, and Revision Calendar to authenticated users
-    const protectedViews = ['ai-tutor', 'study-planner', 'calendar'];
-    if (protectedViews.includes(view) && !authUid) {
-      setAuthRequiredMsg(`Please sign in with Firebase to access ${view === 'ai-tutor' ? 'AI Tutor Hub' : view === 'study-planner' ? 'Automated AI Study Planner' : 'Revision Calendar'}.`);
+    if (view === 'homepage') {
+      setActiveView('homepage');
+      return;
+    }
+
+    if (!authUid) {
+      setAuthRequiredMsg('Please sign in or create an account to access the SemOS study workspace.');
       setIsAuthOpen(true);
       return;
     }
@@ -233,13 +295,18 @@ export default function App() {
     setNotes(prev => [note, ...prev]);
   };
 
-  const handleAddPDF = (newPdfData: Omit<PDFDocument, 'id' | 'uploadDate'>) => {
+  const handleAddPDF = (newPdfData: Omit<PDFDocument, 'id' | 'uploadDate'>): PDFDocument => {
     const pdf: PDFDocument = {
       ...newPdfData,
-      id: `pdf_${Date.now()}`,
-      uploadDate: new Date().toISOString().split('T')[0],
+      id: `pdf_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      uploadDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
     };
     setPdfs(prev => [pdf, ...prev]);
+    return pdf;
+  };
+
+  const handleDeletePDF = (pdfId: string) => {
+    setPdfs(prev => prev.filter(p => p.id !== pdfId));
   };
 
   const handleAddFlashcard = (cardData: Omit<Flashcard, 'id' | 'nextReviewDate' | 'intervalDays' | 'reviewCount' | 'easeFactor'>) => {
@@ -294,16 +361,6 @@ export default function App() {
 
   const handleToggleEventComplete = (id: string) => {
     setEvents(prev => prev.map(e => e.id === id ? { ...e, completed: !e.completed } : e));
-  };
-
-  const handleLoadSampleData = () => {
-    setSubjects(initialSubjects);
-    setTimetableSlots(initialTimetableSlots);
-    setAttendanceLogs(initialAttendanceLogs);
-    setRevisionTasks(initialRevisionTasks);
-    setNotes(initialNotes);
-    setFlashcards(initialFlashcards);
-    setQuizzes(initialQuizzes);
   };
 
   const handleAddSubject = () => {
@@ -492,6 +549,7 @@ export default function App() {
         }}
         notifications={notifications}
         onMarkNotificationsRead={handleMarkNotificationsRead}
+        authUid={authUid}
       />
 
       {/* Main Workspace Layout */}
@@ -525,7 +583,6 @@ export default function App() {
                 setActiveView={handleSelectNavView}
                 setActiveSubjectId={setActiveSubjectId}
                 onOpenAddSubject={() => setIsAddSubjectOpen(true)}
-                onLoadSampleData={handleLoadSampleData}
               />
             )}
 
@@ -541,24 +598,39 @@ export default function App() {
               />
             )}
 
-            {activeView === 'subject' && activeSubject && (
-              <SubjectWorkspace
-                subject={activeSubject}
-                notes={notes}
-                pdfs={pdfs}
-                flashcards={flashcards}
-                quizzes={quizzes}
-                assignments={assignments}
-                onAddNote={handleAddNote}
-                onAddPDF={handleAddPDF}
-                onAddFlashcard={handleAddFlashcard}
-                onBack={() => handleSelectNavView('dashboard')}
-              />
+            {activeView === 'subject' && (
+              activeSubject ? (
+                <SubjectWorkspace
+                  subject={activeSubject}
+                  notes={notes}
+                  pdfs={pdfs}
+                  flashcards={flashcards}
+                  quizzes={quizzes}
+                  assignments={assignments}
+                  onAddNote={handleAddNote}
+                  onAddPDF={handleAddPDF}
+                  onAddFlashcard={handleAddFlashcard}
+                  onBack={() => handleSelectNavView('dashboard')}
+                />
+              ) : (
+                <div className="p-8 text-center max-w-md mx-auto my-12 bg-white rounded-2xl border border-[#EAE7E0] shadow-xs">
+                  <p className="text-zinc-600 mb-4 font-medium text-sm">No subjects created yet. Add your first subject to start taking notes, uploading PDFs, and building flashcards.</p>
+                  <button
+                    onClick={() => setIsAddSubjectOpen(true)}
+                    className="px-4 py-2 bg-[#1A1A1A] text-white rounded-xl text-xs font-semibold shadow-xs hover:bg-[#333333] transition-colors"
+                  >
+                    + Add New Subject
+                  </button>
+                </div>
+              )
             )}
 
             {activeView === 'ai-tutor' && (
               <AITutorView
                 subjects={subjects}
+                pdfs={pdfs}
+                onAddPdf={handleAddPDF}
+                onDeletePdf={handleDeletePDF}
                 user={user}
                 initialSubjectId={activeSubjectId || undefined}
               />
@@ -568,17 +640,11 @@ export default function App() {
               <StudyPlannerView
                 user={user}
                 subjects={subjects}
+                pdfs={pdfs}
+                onAddPdf={handleAddPDF}
+                onDeletePdf={handleDeletePDF}
                 authUid={authUid}
                 onStudySessionCompleted={handleStudySessionCompleted}
-              />
-            )}
-
-            {activeView === 'cgpa-calculator' && (
-              <CgpaCalculator
-                user={user}
-                onUpdateUser={(updated) => setUser(prev => ({ ...prev, ...updated }))}
-                authUid={authUid}
-                initialTargetCgpa={user?.targetGpa || 9.0}
               />
             )}
 
@@ -605,6 +671,7 @@ export default function App() {
                 subjects={subjects}
                 pdfs={pdfs}
                 onAddPDF={handleAddPDF}
+                onDeletePDF={handleDeletePDF}
               />
             )}
 
@@ -664,6 +731,9 @@ export default function App() {
         authEmail={authEmail}
         requiredMessage={authRequiredMsg}
         onOpenAdmin={() => setIsAdminAllowlistOpen(true)}
+        onAuthSuccess={() => {
+          setActiveView('dashboard');
+        }}
       />
 
       <AccessRestrictedModal

@@ -2,23 +2,27 @@ import React, { useState, useRef } from 'react';
 import { Subject, PDFDocument } from '../types';
 import { 
   FileText, Upload, Sparkles, BookOpen, Search, 
-  HelpCircle, Zap, FileUp, Check, ArrowRight, Eye, RefreshCw, X, AlertCircle
+  HelpCircle, Zap, FileUp, Check, ArrowRight, Eye, RefreshCw, X, AlertCircle, Folder
 } from 'lucide-react';
 import { FormattedMessage } from './FormattedMessage';
+import { FileLibraryModal } from './FileLibraryModal';
 
 interface PDFBrainViewProps {
   subjects: Subject[];
   pdfs: PDFDocument[];
-  onAddPDF: (pdf: Omit<PDFDocument, 'id' | 'uploadDate'>) => void;
+  onAddPDF: (pdf: Omit<PDFDocument, 'id' | 'uploadDate'>) => PDFDocument | void;
+  onDeletePDF?: (pdfId: string) => void;
 }
 
 export const PDFBrainView: React.FC<PDFBrainViewProps> = ({
   subjects,
   pdfs,
   onAddPDF,
+  onDeletePDF,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [isFileLibraryOpen, setIsFileLibraryOpen] = useState<boolean>(false);
   const [selectedPdfId, setSelectedPdfId] = useState<string>(pdfs[0]?.id || '');
   const [docAction, setDocAction] = useState<string>('summarize');
   const [userQuestion, setUserQuestion] = useState('');
@@ -124,7 +128,7 @@ export const PDFBrainView: React.FC<PDFBrainViewProps> = ({
           </div>
         </div>
 
-        {/* Upload Trigger Input */}
+        {/* Upload Trigger & Library Controls - SINGLE UNIFIED OPTION */}
         <div className="flex items-center gap-2">
           <input 
             type="file"
@@ -134,33 +138,13 @@ export const PDFBrainView: React.FC<PDFBrainViewProps> = ({
             className="hidden"
           />
 
-          <select
-            value={selectedSubjectId}
-            onChange={(e) => setSelectedSubjectId(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-[#FBFBF9] border border-[#EAE7E0] text-[#1A1A1A] text-xs font-semibold focus:outline-none"
-          >
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>{s.code} - {s.name.split('(')[0]}</option>
-            ))}
-          </select>
-
           <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="px-4 py-2.5 rounded-2xl bg-[#1A1A1A] hover:bg-[#333333] text-[#FBFBF9] font-bold text-xs flex items-center gap-2 shadow-md transition-all shrink-0"
-            id="upload-pdf-file-btn"
+            onClick={() => setIsFileLibraryOpen(true)}
+            className="px-5 py-2.5 rounded-2xl bg-[#1A1A1A] hover:bg-[#333333] text-[#FBFBF9] font-bold text-xs flex items-center gap-2 shadow-md transition-all shrink-0"
+            id="open-pdf-brain-library-btn"
           >
-            {isUploading ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin text-[#A68942]" />
-                <span>Extracting Text...</span>
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4 text-[#A68942]" />
-                <span>Upload PDF Document</span>
-              </>
-            )}
+            <Folder className="w-4 h-4 text-[#A68942]" />
+            <span>Inbuilt File Library ({pdfs.length})</span>
           </button>
         </div>
       </div>
@@ -182,7 +166,7 @@ export const PDFBrainView: React.FC<PDFBrainViewProps> = ({
               PDF Document Library ({pdfs.length})
             </h2>
             <button 
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setIsFileLibraryOpen(true)}
               className="text-[11px] font-bold text-[#A68942] hover:underline"
             >
               + Add File
@@ -272,7 +256,7 @@ export const PDFBrainView: React.FC<PDFBrainViewProps> = ({
               {/* MODE 1: Actual Visual PDF Document Viewer */}
               {viewMode === 'visual' && (
                 <div className="space-y-4">
-                  {selectedPdf.fileUrl ? (
+                  {Boolean(selectedPdf?.fileUrl) ? (
                     <div className="w-full h-[520px] rounded-2xl border border-[#EAE7E0] overflow-hidden bg-[#F6F4F0]">
                       <iframe
                         src={selectedPdf.fileUrl}
@@ -378,6 +362,27 @@ export const PDFBrainView: React.FC<PDFBrainViewProps> = ({
         </div>
 
       </div>
+
+      {/* File Library Modal */}
+      <FileLibraryModal
+        isOpen={isFileLibraryOpen}
+        onClose={() => setIsFileLibraryOpen(false)}
+        pdfs={pdfs}
+        subjects={subjects}
+        onSelectPdf={(pdf) => {
+          setSelectedPdfId(pdf.id);
+          setViewMode('visual');
+        }}
+        onAddPdf={(newPdf) => {
+          const res = onAddPDF(newPdf);
+          if (res) setSelectedPdfId(res.id);
+          return res;
+        }}
+        onDeletePdf={onDeletePDF}
+        title="Inbuilt File Library"
+        subtitle="Manage and analyze saved documents or upload new files"
+        actionLabel="Open & Analyze"
+      />
 
     </div>
   );

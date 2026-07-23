@@ -7,7 +7,7 @@ import {
 import { 
   Sparkles, Flame, Trophy, Clock, CheckCircle2, AlertTriangle, 
   ArrowRight, Plus, Bot, FileUp, Layers, HelpCircle, FileText, 
-  Calendar as CalendarIcon, CalendarCheck, BookOpen, Sigma, Zap, Code, Cpu
+  Calendar as CalendarIcon, CalendarCheck, BookOpen, Sigma, Zap, Code, Cpu, Trash2, RefreshCw
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -22,7 +22,6 @@ interface DashboardProps {
   setActiveView: (view: string) => void;
   setActiveSubjectId: (id: string | null) => void;
   onOpenAddSubject: () => void;
-  onLoadSampleData?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -37,7 +36,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   setActiveView,
   setActiveSubjectId,
   onOpenAddSubject,
-  onLoadSampleData,
 }) => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -164,13 +162,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveView('cgpa-calculator')}
+            onClick={() => setActiveView('pdf-brain')}
             className="p-3.5 rounded-2xl bg-[#F6F4F0] hover:bg-[#EAE7E0] border border-[#EAE7E0] text-left transition-all group"
-            id="quick-action-cgpa-calc"
+            id="quick-action-file-library"
           >
-            <Trophy className="w-5 h-5 text-[#A68942] mb-2 group-hover:scale-110 transition-transform" />
-            <p className="font-serif font-bold text-xs text-[#1A1A1A]">CGPA Tracker</p>
-            <p className="text-[10px] text-zinc-500 mt-0.5">10.0 Grade Tracker</p>
+            <FileUp className="w-5 h-5 text-[#A68942] mb-2 group-hover:scale-110 transition-transform" />
+            <p className="font-serif font-bold text-xs text-[#1A1A1A]">Inbuilt File Library</p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">Manage & attach files</p>
           </button>
 
           <button
@@ -263,14 +261,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <h2 className="font-serif text-xl font-bold text-[#1A1A1A]">Enrolled Subjects</h2>
                 <p className="text-xs text-zinc-500">Workspaces for notes, PDFs, flashcards & AI tutors</p>
               </div>
-              <button
-                onClick={onOpenAddSubject}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#F6F4F0] hover:bg-[#EAE7E0] text-[#1A1A1A] border border-[#EAE7E0] text-xs font-semibold transition-colors"
-                id="add-subject-dashboard-btn"
-              >
-                <Plus className="w-3.5 h-3.5 text-[#A68942]" />
-                <span>Add Subject</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onOpenAddSubject}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#1A1A1A] hover:bg-[#333333] text-[#FBFBF9] font-semibold text-xs transition-colors shadow-xs"
+                  id="add-subject-dashboard-btn"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#A68942]" />
+                  <span>Add Subject</span>
+                </button>
+              </div>
             </div>
 
             {subjects.length === 0 ? (
@@ -279,7 +279,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 authUid={authUid}
                 onOpenAddSubject={onOpenAddSubject}
                 onOpenTimetable={() => setActiveView('timetable')}
-                onLoadSampleData={onLoadSampleData || (() => {})}
               />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

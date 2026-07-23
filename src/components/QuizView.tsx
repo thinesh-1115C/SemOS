@@ -139,9 +139,13 @@ export const QuizView: React.FC<QuizViewProps> = ({
                 onChange={(e) => setSelectedSubjectId(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold"
               >
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name.split('(')[0]}</option>
-                ))}
+                {subjects.length === 0 ? (
+                  <option value="">General Subject</option>
+                ) : (
+                  subjects.map((s) => (
+                    <option key={s.id} value={s.id}>{(s?.name || '').split('(')[0]}</option>
+                  ))
+                )}
               </select>
             </div>
 

@@ -41,10 +41,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const generateForgettingCurveSchedule = () => {
     setAiSchedule(`📅 Automated Forgetting Curve Revision Schedule Generated:
 
-• Today: Review "Green's Theorem Vector Calculus" (Day 1)
-• Tomorrow: Review "C++ AVL Tree Rotations" (Day 2 Review)
-• In 3 Days: Review "BJT Voltage Divider Biasing" (Day 5 Review)
-• In 8 Days: Comprehensive Review for Math III Mid-Semester Exam (Day 10 Review)`);
+• Day 1 (Today): Initial Topic Review & Flashcards
+• Day 2 (Tomorrow): Active Recall & Practice Problems
+• Day 5: Spaced Review & Self-Quiz
+• Day 10: Final Comprehensive Mastery Check`);
   };
 
   return (

@@ -1,14 +1,18 @@
 import React, { useState, useRef } from 'react';
 import { 
   FileText, Upload, Sparkles, Calendar, CheckSquare, Square, Clock, AlertCircle, 
-  ArrowRight, BookOpen, Target, Award, Brain, RefreshCw, CheckCircle2, BookmarkPlus
+  ArrowRight, BookOpen, Target, Award, Brain, RefreshCw, CheckCircle2, BookmarkPlus, Folder
 } from 'lucide-react';
-import { UserProfile, Subject } from '../types';
+import { UserProfile, Subject, PDFDocument } from '../types';
 import { saveUserStudyPlan } from '../lib/firebase';
+import { FileLibraryModal } from './FileLibraryModal';
 
 interface StudyPlannerViewProps {
   user: UserProfile;
   subjects: Subject[];
+  pdfs?: PDFDocument[];
+  onAddPdf?: (pdf: Omit<PDFDocument, 'id' | 'uploadDate'>) => PDFDocument | void;
+  onDeletePdf?: (pdfId: string) => void;
   authUid?: string | null;
   onStudySessionCompleted?: (session: {
     sourceSessionId: string;
@@ -44,17 +48,21 @@ export interface GeneratedStudyPlan {
 export const StudyPlannerView: React.FC<StudyPlannerViewProps> = ({ 
   user, 
   subjects, 
+  pdfs = [],
+  onAddPdf,
+  onDeletePdf,
   authUid,
   onStudySessionCompleted 
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [selectedSubject, setSelectedSubject] = useState<string>(subjects[0]?.name || 'Data Structures');
+  const [selectedSubject, setSelectedSubject] = useState<string>(subjects[0]?.name || '');
   const [daysCount, setDaysCount] = useState<number>(7);
   const [dailyHours, setDailyHours] = useState<number>(3.5);
   const [completionNotification, setCompletionNotification] = useState<string | null>(null);
   
-  // File upload state
+  // File upload state & Library modal
+  const [isFileLibraryOpen, setIsFileLibraryOpen] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [parsedDocName, setParsedDocName] = useState<string | null>(null);
   const [parsedDocText, setParsedDocText] = useState<string>('');
@@ -210,7 +218,7 @@ export const StudyPlannerView: React.FC<StudyPlannerViewProps> = ({
             Automated AI Study Planner
           </h1>
           <p className="text-zinc-600 text-xs sm:text-sm mt-1">
-            Upload your lecture slides or textbook PDF, and SemOS will construct a day-by-day study timeline tailored to your target CGPA.
+            Upload or pick lecture slides from your file library, and SemOS will construct a day-by-day study timeline.
           </p>
         </div>
 
@@ -244,40 +252,48 @@ export const StudyPlannerView: React.FC<StudyPlannerViewProps> = ({
         <div className="space-y-6">
           
           {/* File Drag and Drop Zone */}
-          <div 
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className="p-8 rounded-3xl border-2 border-dashed border-[#A68942]/40 bg-[#FBFBF9] hover:bg-[#F6F4F0] transition-all cursor-pointer text-center space-y-3 shadow-xs group"
-          >
-            <input 
-              type="file" 
-              ref={fileInputRef}
-              onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-              accept=".pdf,.ppt,.pptx,.txt"
-              className="hidden"
-            />
-            
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-[#1A1A1A] text-[#A68942] flex items-center justify-center group-hover:scale-105 transition-transform shadow-sm">
-              {isUploading ? (
-                <RefreshCw className="w-6 h-6 animate-spin text-[#A68942]" />
-              ) : (
-                <Upload className="w-6 h-6" />
-              )}
-            </div>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setIsFileLibraryOpen(true)}
+              className="w-full py-3 px-4 rounded-2xl bg-[#1A1A1A] hover:bg-[#333333] text-[#FBFBF9] font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
+              id="study-planner-open-library-btn"
+            >
+              <Folder className="w-4 h-4 text-[#A68942]" />
+              <span>Select File from Inbuilt Library</span>
+            </button>
 
-            <div>
-              <p className="font-serif font-bold text-sm text-[#1A1A1A]">
-                {isUploading ? 'Extracting Text & Slides...' : 'Drop Lecture Slides or Textbooks Here'}
-              </p>
-              <p className="text-xs text-zinc-500 mt-1">
-                Supports <strong className="text-[#A68942]">.PDF, .PPT, .PPTX</strong> & text files
-              </p>
-            </div>
+            <div 
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className="p-6 rounded-3xl border-2 border-dashed border-[#A68942]/40 bg-[#FBFBF9] hover:bg-[#F6F4F0] transition-all cursor-pointer text-center space-y-2 shadow-xs group"
+            >
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                accept=".pdf,.ppt,.pptx,.txt"
+                className="hidden"
+              />
+              
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-[#1A1A1A] text-[#A68942] flex items-center justify-center group-hover:scale-105 transition-transform shadow-sm">
+                {isUploading ? (
+                  <RefreshCw className="w-5 h-5 animate-spin text-[#A68942]" />
+                ) : (
+                  <Upload className="w-5 h-5" />
+                )}
+              </div>
 
-            <span className="inline-block px-3 py-1 rounded-full bg-[#F6F4F0] border border-[#EAE7E0] text-[11px] font-medium text-zinc-600">
-              Browse Files from System
-            </span>
+              <div>
+                <p className="font-serif font-bold text-xs sm:text-sm text-[#1A1A1A]">
+                  {isUploading ? 'Extracting Text & Slides...' : 'Or Upload New File from Device'}
+                </p>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Supports <strong className="text-[#A68942]">.PDF, .PPT, .PPTX</strong> & text files
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Uploaded File Info Card */}
@@ -318,9 +334,13 @@ export const StudyPlannerView: React.FC<StudyPlannerViewProps> = ({
                   onChange={(e) => setSelectedSubject(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-[#F6F4F0] border border-[#EAE7E0] text-[#1A1A1A] focus:outline-none"
                 >
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.name}>{s.code} – {s.name}</option>
-                  ))}
+                  {subjects.length === 0 ? (
+                    <option value="General Academic Study">General Academic Study</option>
+                  ) : (
+                    subjects.map((s) => (
+                      <option key={s.id} value={s.name}>{s.code} – {(s?.name || '')}</option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -509,6 +529,34 @@ export const StudyPlannerView: React.FC<StudyPlannerViewProps> = ({
         </div>
 
       </div>
+
+      {/* File Library Modal */}
+      <FileLibraryModal
+        isOpen={isFileLibraryOpen}
+        onClose={() => setIsFileLibraryOpen(false)}
+        pdfs={pdfs || []}
+        subjects={subjects}
+        onSelectPdf={(pdf) => {
+          setParsedDocName(pdf.title);
+          setParsedDocText(pdf.extractedText || pdf.summary || '');
+          setParsedPages(pdf.pageCount || 1);
+        }}
+        onAddPdf={(newPdf) => {
+          if (onAddPdf) {
+            const res = onAddPdf(newPdf);
+            if (res) {
+              setParsedDocName(res.title);
+              setParsedDocText(res.extractedText || res.summary || '');
+              setParsedPages(res.pageCount || 1);
+            }
+            return res;
+          }
+        }}
+        onDeletePdf={onDeletePdf}
+        title="Select Document for AI Study Schedule"
+        subtitle="Pick a lecture slide deck or syllabus from your library, or upload a new file"
+        actionLabel="Select for Schedule"
+      />
 
     </div>
   );

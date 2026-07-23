@@ -155,7 +155,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLaunchApp }) => {
                 <div className="w-3 h-3 rounded-full bg-[#1A1A1A]" />
                 <div className="w-3 h-3 rounded-full bg-[#A68942]" />
                 <div className="w-3 h-3 rounded-full bg-[#EAE7E0]" />
-                <span className="ml-2 text-xs font-mono text-zinc-500">SemOS Workspace — Semester 3</span>
+                <span className="ml-2 text-xs font-mono text-zinc-500">SemOS Student Workspace</span>
               </div>
               <span className="px-2.5 py-1 rounded-full bg-[#F6F4F0] border border-[#EAE7E0] text-[#A68942] text-[11px] font-semibold">
                 Live AI Memory Active

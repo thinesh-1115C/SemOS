@@ -1,13 +1,11 @@
 import React from 'react';
-import { Sparkles, Calendar, BookOpen, Plus, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react';
-import { Subject, TimetableSlot } from '../types';
+import { Sparkles, Calendar, BookOpen, ShieldCheck, ArrowRight } from 'lucide-react';
 
 interface FirstTimeOnboardingCardProps {
   userName: string;
   authUid?: string | null;
   onOpenAddSubject: () => void;
   onOpenTimetable: () => void;
-  onLoadSampleData: () => void;
 }
 
 export const FirstTimeOnboardingCard: React.FC<FirstTimeOnboardingCardProps> = ({
@@ -15,7 +13,6 @@ export const FirstTimeOnboardingCard: React.FC<FirstTimeOnboardingCardProps> = (
   authUid,
   onOpenAddSubject,
   onOpenTimetable,
-  onLoadSampleData,
 }) => {
   return (
     <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-[#1A1A1A] via-[#2A2A2A] to-[#1A1A1A] text-[#FBFBF9] shadow-xl space-y-6 relative overflow-hidden border border-[#A68942]/30">
@@ -57,7 +54,7 @@ export const FirstTimeOnboardingCard: React.FC<FirstTimeOnboardingCardProps> = (
       </div>
 
       {/* Quick Action Steps */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
         <div 
           onClick={onOpenAddSubject}
           className="p-4 rounded-2xl bg-[#262626] border border-zinc-700 hover:border-[#A68942] transition-all cursor-pointer group space-y-3"
@@ -90,24 +87,6 @@ export const FirstTimeOnboardingCard: React.FC<FirstTimeOnboardingCardProps> = (
             </h3>
             <p className="text-xs text-zinc-400 mt-1">
               Schedule weekly lectures & lab slots for automated attendance calculations.
-            </p>
-          </div>
-        </div>
-
-        <div 
-          onClick={onLoadSampleData}
-          className="p-4 rounded-2xl bg-[#262626] border border-zinc-700 hover:border-emerald-500 transition-all cursor-pointer group space-y-3"
-        >
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="font-serif font-bold text-sm text-white group-hover:text-emerald-400 transition-colors flex items-center gap-1">
-              <span>3. Load Engineering Template</span>
-              <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </h3>
-            <p className="text-xs text-zinc-400 mt-1">
-              Populate CS & Engineering sample courses with pre-built revision tasks.
             </p>
           </div>
         </div>
