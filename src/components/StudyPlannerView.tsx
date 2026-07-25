@@ -273,7 +273,7 @@ export const StudyPlannerView: React.FC<StudyPlannerViewProps> = ({
                 type="file" 
                 ref={fileInputRef}
                 onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-                accept=".pdf,.ppt,.pptx,.txt"
+                accept=".pdf,.ppt,.pptx,.txt,.doc,.docx"
                 className="hidden"
               />
               
@@ -290,7 +290,7 @@ export const StudyPlannerView: React.FC<StudyPlannerViewProps> = ({
                   {isUploading ? 'Extracting Text & Slides...' : 'Or Upload New File from Device'}
                 </p>
                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Supports <strong className="text-[#A68942]">.PDF, .PPT, .PPTX</strong> & text files
+                  Supports <strong className="text-[#A68942]">.PDF, .PPT, .PPTX, .DOC, .DOCX</strong> & text files
                 </p>
               </div>
             </div>

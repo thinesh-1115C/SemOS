@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  ShieldCheck, UserPlus, Trash2, X, Check, Lock, Unlock, Sparkles, Mail, UserCheck, ToggleLeft, ToggleRight
+  ShieldCheck, UserPlus, Trash2, X, Check, Lock, Unlock, Sparkles, Mail, UserCheck, ToggleLeft, ToggleRight, Wifi
 } from 'lucide-react';
 import { 
   getAllowedEmails, addAllowedEmail, removeAllowedEmail, 
-  isAllowlistEnabled, setAllowlistEnabled, getAccessRequests, updateAccessRequestStatus 
+  isAllowlistEnabled, setAllowlistEnabled, getAccessRequests, updateAccessRequestStatus,
+  syncAccessRequestsFromCloud, syncAllowlistFromCloud, subscribeToAllowlistSync
 } from '../lib/authGuard';
+import { getOnlineUsers, subscribeToAccessRequests } from '../lib/firebase';
 
 interface AdminAllowlistModalProps {
   isOpen: boolean;
@@ -17,8 +19,63 @@ export const AdminAllowlistModal: React.FC<AdminAllowlistModalProps> = ({ isOpen
   const [allowlistActive, setAllowlistActive] = useState<boolean>(isAllowlistEnabled());
   const [newEmail, setNewEmail] = useState('');
   const [requests, setRequests] = useState(getAccessRequests());
-  const [activeTab, setActiveTab] = useState<'approved' | 'requests'>('approved');
+  const [activeTab, setActiveTab] = useState<'approved' | 'requests' | 'online'>('approved');
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+  const [loadingOnline, setLoadingOnline] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      syncAllowlistFromCloud().then(() => {
+        setEmails(getAllowedEmails());
+        setAllowlistActive(isAllowlistEnabled());
+      }).catch(err => console.error(err));
+
+      const unsubAllowlist = subscribeToAllowlistSync();
+
+      syncAccessRequestsFromCloud().then(reqs => setRequests(reqs)).catch(err => console.error(err));
+      const unsubscribeReqs = subscribeToAccessRequests((cloudReqs) => {
+        const local = getAccessRequests();
+        const mergedMap = new Map<string, any>();
+        for (const r of [...local, ...(cloudReqs || [])]) {
+          const key = r.id || r.email;
+          const existing = mergedMap.get(key);
+          mergedMap.set(key, existing ? { ...existing, ...r } : r);
+        }
+        const statusOrder: Record<string, number> = { pending: 0, approved: 1, rejected: 2 };
+        const merged = Array.from(mergedMap.values()).sort((a, b) => {
+          if ((statusOrder[a.status] ?? 99) !== (statusOrder[b.status] ?? 99)) {
+            return (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99);
+          }
+          return new Date(b.requestedAt || 0).getTime() - new Date(a.requestedAt || 0).getTime();
+        });
+
+        // Ensure approved requests are added to allowed email list immediately
+        for (const req of merged) {
+          if (req.status === 'approved') {
+            addAllowedEmail(req.email);
+          }
+        }
+
+        setRequests(merged);
+        setEmails(getAllowedEmails());
+      });
+
+      if (activeTab === 'online') {
+        setLoadingOnline(true);
+        getOnlineUsers()
+          .then(users => setOnlineUsers(users))
+          .catch(err => console.error(err))
+          .finally(() => setLoadingOnline(false));
+      }
+
+      return () => {
+        unsubAllowlist();
+        unsubscribeReqs();
+      };
+    }
+  }, [isOpen, activeTab]);
+
 
   if (!isOpen) return null;
 
@@ -142,6 +199,18 @@ export const AdminAllowlistModal: React.FC<AdminAllowlistModalProps> = ({ isOpen
             <Mail className="w-4 h-4 text-rose-500" />
             <span>Pending Requests ({requests.filter(r => r.status === 'pending').length})</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('online')}
+            className={`flex-1 py-2 font-bold border-b-2 transition-colors flex items-center justify-center gap-2 ${
+              activeTab === 'online'
+                ? 'border-[#1A1A1A] text-[#1A1A1A]'
+                : 'border-transparent text-zinc-400 hover:text-zinc-600'
+            }`}
+          >
+            <Wifi className="w-4 h-4 text-emerald-600 animate-pulse" />
+            <span>Online Now</span>
+          </button>
         </div>
 
         {/* Approved Emails Tab */}
@@ -237,6 +306,61 @@ export const AdminAllowlistModal: React.FC<AdminAllowlistModalProps> = ({ isOpen
                       </button>
                     </div>
                   )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Online Users Tab */}
+        {activeTab === 'online' && (
+          <div className="space-y-3 text-xs max-h-64 overflow-y-auto pr-1">
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-zinc-500 font-mono text-[11px]">Active sessions using SemOS</span>
+              <button
+                onClick={() => {
+                  setLoadingOnline(true);
+                  getOnlineUsers()
+                    .then(users => setOnlineUsers(users))
+                    .catch(err => console.error(err))
+                    .finally(() => setLoadingOnline(false));
+                }}
+                className="text-[11px] font-bold text-[#A68942] hover:underline"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {loadingOnline ? (
+              <p className="text-center py-6 text-zinc-400 font-mono">Loading active users...</p>
+            ) : onlineUsers.length === 0 ? (
+              <p className="text-center py-6 text-zinc-400 font-mono">No active online users found.</p>
+            ) : (
+              onlineUsers.map((u) => (
+                <div
+                  key={u.id || u.uid}
+                  className="p-3.5 rounded-2xl bg-[#F6F4F0] border border-[#EAE7E0] flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <img
+                        src={u.photoURL || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150"}
+                        alt={u.displayName}
+                        className="w-9 h-9 rounded-full object-cover border border-[#EAE7E0]"
+                      />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-[#1A1A1A] block">{u.displayName || 'User'}</span>
+                      <span className="font-mono text-[11px] text-zinc-500">{u.email}</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] capitalize">
+                      {u.currentView || 'dashboard'}
+                    </span>
+                    <span className="block font-mono text-[10px] text-zinc-400 mt-0.5">Active now</span>
+                  </div>
                 </div>
               ))
             )}

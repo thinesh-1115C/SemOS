@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   LayoutDashboard, BookOpen, Bot, Layers, HelpCircle, 
   FileText, Calendar, CalendarCheck, PenTool, BarChart3, Plus, Sparkles,
-  Zap, Compass
+  Zap, Compass, ShieldCheck
 } from 'lucide-react';
 import { Subject } from '../types';
 
@@ -35,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'calendar', label: 'Revision Planner', icon: Calendar },
     { id: 'writing-assistant', label: 'Writing Assistant', icon: PenTool },
     { id: 'analytics', label: 'Progress & XP', icon: BarChart3 },
+    { id: 'admin', label: 'Admin Dashboard', icon: ShieldCheck, badge: 'Live' },
   ];
 
   return (

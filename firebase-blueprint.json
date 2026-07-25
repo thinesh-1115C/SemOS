@@ -61,9 +61,53 @@
         "completed": { "type": "boolean" }
       },
       "required": ["sourceSessionId", "subjectId", "topic", "dayInterval", "scheduledDate"]
+    },
+    "OnlineUser": {
+      "title": "OnlineUser",
+      "description": "Real-time online presence status of active users",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "currentView": { "type": "string" }
+      },
+      "required": ["uid"]
+    },
+    "AccessRequestEntity": {
+      "title": "AccessRequestEntity",
+      "description": "Access request from unapproved users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "reason": { "type": "string" },
+        "requestedAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "email"]
+    },
+    "AllowlistSettings": {
+      "title": "AllowlistSettings",
+      "description": "Global allowlist configuration and approved email addresses",
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "allowedEmails": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "updatedAt": { "type": "string" }
+      }
     }
   },
   "firestore": {
+    "/settings/allowlist": {
+      "schema": "AllowlistSettings",
+      "description": "Global allowlist configuration document"
+    },
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "Main user profile document"
@@ -83,6 +127,14 @@
     "/users/{userId}/revisionTasks/{taskId}": {
       "schema": "RevisionTask",
       "description": "User auto-generated spaced repetition revision tasks"
+    },
+    "/online_users/{userId}": {
+      "schema": "OnlineUser",
+      "description": "Online presence tracking collection readable only by admin"
+    },
+    "/access_requests/{requestId}": {
+      "schema": "AccessRequestEntity",
+      "description": "Access requests submitted by unapproved users"
     }
   }
 }

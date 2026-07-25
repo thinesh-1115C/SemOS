@@ -46,6 +46,26 @@ async function extractTextFromPptx(buffer: Buffer): Promise<{ text: string; page
   }
 }
 
+// DOCX Text Extractor Helper
+async function extractTextFromDocx(buffer: Buffer): Promise<{ text: string; pageCount: number }> {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    const documentXml = zip.file("word/document.xml");
+    if (!documentXml) {
+      throw new Error("Invalid Word document structure.");
+    }
+    const xmlContent = await documentXml.async("string");
+    const plainText = xmlContent.replace(/<w:p[^>]*>/g, "\n").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    return {
+      text: plainText || "Word document loaded. Content extracted successfully.",
+      pageCount: Math.max(1, Math.ceil(plainText.length / 2000)),
+    };
+  } catch (err: any) {
+    console.error("DOCX Parsing error:", err);
+    throw new Error("Failed to extract text from Word document (.docx/.doc).");
+  }
+}
+
 // Initialize Gemini SDK with telemetry header
 const ai = process.env.GEMINI_API_KEY
   ? new GoogleGenAI({
@@ -190,27 +210,48 @@ app.post("/api/ai/generate-flashcards", async (req, res) => {
   if (!checkGeminiAvailable(res)) return;
 
   try {
-    const { topic, sourceText, subject, count = 6 } = req.body;
+    const { topic, sourceText, subject, count = 15, generationMode = 'comprehensive' } = req.body;
+
+    // Dynamically calculate target count based on sourceText length and mode
+    let targetCount = Number(count) || 15;
+    if (sourceText) {
+      const len = sourceText.length;
+      if (generationMode === 'exhaustive' || len > 2000) {
+        // Scale proportionally: ~1 card per 200 chars, max 35 cards
+        targetCount = Math.min(35, Math.max(16, Math.ceil(len / 200)));
+      } else if (len > 800) {
+        targetCount = Math.min(25, Math.max(12, Math.ceil(len / 250)));
+      } else {
+        targetCount = Math.min(15, Math.max(8, Math.ceil(len / 300)));
+      }
+    }
 
     const response = await ai!.models.generateContent({
       model: "gemini-3.6-flash",
-      contents: `Generate ${count} high-yield flashcards for the subject "${subject}" on the topic/text:
-Topic: ${topic || "General"}
-${sourceText ? `Source Content:\n${sourceText.slice(0, 5000)}` : ""}
+      contents: `Generate exactly ${targetCount} comprehensive, high-yield academic flashcards for the subject "${subject}".
+Topic: ${topic || "Comprehensive Chapter Review"}
+Generation Mode: ${generationMode} (Scale depth and coverage thoroughly).
+${sourceText ? `Source Content / File Excerpt (Analyze every paragraph, formula, definition, and concept):\n${sourceText.slice(0, 15000)}` : "Generate thorough foundational and advanced flashcards for this topic."}
+
+Ensure the flashcards cover:
+1. Core definitions and foundational principles.
+2. Important mathematical formulas, theorems, or equations (if applicable).
+3. Critical conceptual nuances, trade-offs, and edge cases.
+4. Numerical or practical application problem types.
 
 Return a valid JSON array of flashcard objects.`,
       config: {
-        systemInstruction: "You are an expert academic flashcard generator for spaced repetition learning.",
+        systemInstruction: "You are an expert academic flashcard generator for spaced repetition learning, creating rigorous, high-yield decks.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
             properties: {
-              front: { type: Type.STRING, description: "Question, term, or prompt on front of card" },
-              back: { type: Type.STRING, description: "Clear, concise answer or explanation on back" },
+              front: { type: Type.STRING, description: "Precise question, term, prompt, or problem statement on front of card" },
+              back: { type: Type.STRING, description: "Clear, rigorous, comprehensive explanation, formula, or answer on back" },
               difficulty: { type: Type.STRING, description: "Easy, Medium, or Hard" },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+              tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Relevant topic tags" },
             },
             required: ["front", "back", "difficulty"],
           },
@@ -220,7 +261,7 @@ Return a valid JSON array of flashcard objects.`,
 
     const jsonStr = response.text || "[]";
     const flashcards = JSON.parse(jsonStr);
-    res.json({ flashcards });
+    res.json({ flashcards, generatedCount: flashcards.length });
   } catch (error: any) {
     console.error("Error generating flashcards:", error);
     res.status(500).json({ error: error?.message || "Failed to generate flashcards." });
@@ -389,6 +430,10 @@ app.post("/api/parse-document", upload.single("file"), async (req, res) => {
       const pptResult = await extractTextFromPptx(fileBuffer);
       extractedText = pptResult.text;
       pageCount = pptResult.pageCount;
+    } else if (lowerName.endsWith(".docx") || lowerName.endsWith(".doc") || mimeType.includes("word") || mimeType.includes("document")) {
+      const docxResult = await extractTextFromDocx(fileBuffer);
+      extractedText = docxResult.text;
+      pageCount = docxResult.pageCount;
     } else {
       // Plain text or markdown
       extractedText = fileBuffer.toString("utf-8");

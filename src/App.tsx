@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { Homepage } from './components/Homepage';
@@ -18,7 +19,9 @@ import { GlobalSearchModal } from './components/GlobalSearchModal';
 import { AuthModal } from './components/AuthModal';
 import { AccessRestrictedModal } from './components/AccessRestrictedModal';
 import { AdminAllowlistModal } from './components/AdminAllowlistModal';
+import { AdminDashboard } from './components/AdminDashboard';
 import { FirstTimeOnboardingCard } from './components/FirstTimeOnboardingCard';
+import { EditProfileModal } from './components/EditProfileModal';
 
 import { 
   UserProfile, Subject, NoteItem, PDFDocument, Flashcard, Quiz, 
@@ -29,11 +32,15 @@ import {
 import { 
   generateRevisionTasksForSession, triggerSpacedRepetition 
 } from './lib/revisionAlgorithm';
-import { isEmailAllowed } from './lib/authGuard';
+import { 
+  isEmailAllowed, isAdmin, 
+  subscribeToAllowlistSync, syncAllowlistFromCloud, syncAccessRequestsFromCloud 
+} from './lib/authGuard';
 
 import { 
-  subscribeToAuthChanges, getUserProfile, 
-  getUserRevisionTasks, saveUserRevisionTasksBatch, updateUserRevisionTask, logOut 
+  subscribeToAuthChanges, getUserProfile, updateUserProfileDoc,
+  getUserRevisionTasks, saveUserRevisionTasksBatch, updateUserRevisionTask, logOut,
+  updateOnlinePresence, subscribeToAccessRequests, saveProfileToProfilesCollection
 } from './lib/firebase';
 
 export default function App() {
@@ -49,6 +56,7 @@ export default function App() {
   // Modals state
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
   const [isAccessRestrictedOpen, setIsAccessRestrictedOpen] = useState(false);
   const [isAdminAllowlistOpen, setIsAdminAllowlistOpen] = useState(false);
@@ -197,10 +205,39 @@ export default function App() {
     localStorage.setItem('semos_revision_tasks', JSON.stringify(revisionTasks));
   }, [revisionTasks]);
 
+  // Subscribe to real-time Allowlist & Access Request Sync across devices
+  useEffect(() => {
+    const unsubAllowlist = subscribeToAllowlistSync();
+
+    const evaluateAuthorization = () => {
+      const targetEmail = authEmail || unauthorizedAttemptEmail;
+      if (targetEmail && isEmailAllowed(targetEmail)) {
+        setIsAccessRestrictedOpen(false);
+        setUnauthorizedAttemptEmail(null);
+      }
+    };
+
+    syncAllowlistFromCloud().then(evaluateAuthorization).catch(err => console.error(err));
+    syncAccessRequestsFromCloud().then(evaluateAuthorization).catch(err => console.error(err));
+
+    const unsubRequests = subscribeToAccessRequests(() => {
+      syncAccessRequestsFromCloud().then(evaluateAuthorization).catch(err => console.error(err));
+    });
+
+    return () => {
+      unsubAllowlist();
+      unsubRequests();
+    };
+  }, [authEmail, unauthorizedAttemptEmail]);
+
   // Subscribe to Firebase Authentication Changes
   useEffect(() => {
     const unsubscribe = subscribeToAuthChanges(async (fbUser) => {
       if (fbUser) {
+        // Sync allowlist config and requests from cloud first
+        await syncAllowlistFromCloud();
+        await syncAccessRequestsFromCloud();
+
         // Intercept and check allowlist if enabled
         if (!isEmailAllowed(fbUser.email)) {
           setUnauthorizedAttemptEmail(fbUser.email);
@@ -225,9 +262,11 @@ export default function App() {
         if (dbProfile) {
           setUser(prev => ({
             ...prev,
+            name: dbProfile.displayName || (dbProfile as any).name || fbUser.displayName || prev.name,
             targetGpa: dbProfile.targetCgpa || prev.targetGpa,
             major: dbProfile.major || prev.major,
             semester: dbProfile.semester || prev.semester,
+            avatar: dbProfile.photoURL || (dbProfile as any).avatar || prev.avatar,
           }));
         }
 
@@ -236,6 +275,9 @@ export default function App() {
         if (dbRevTasks && dbRevTasks.length > 0) {
           setRevisionTasks(dbRevTasks as RevisionTask[]);
         }
+
+        // Do not show landing page after user login/signin
+        setActiveView(prev => (prev === 'homepage' ? 'dashboard' : prev));
       } else {
         setAuthUid(null);
         setAuthEmail(null);
@@ -256,6 +298,29 @@ export default function App() {
   useEffect(() => { localStorage.setItem('semos_assignments', JSON.stringify(assignments)); }, [assignments]);
   useEffect(() => { localStorage.setItem('semos_events', JSON.stringify(events)); }, [events]);
   useEffect(() => { localStorage.setItem('semos_notifications', JSON.stringify(notifications)); }, [notifications]);
+
+  // Presence heartbeat
+  useEffect(() => {
+    if (authUid && user) {
+      updateOnlinePresence({
+        uid: authUid,
+        email: authEmail || user.email,
+        displayName: user.name,
+        photoURL: user.avatar,
+      }, activeView).catch(err => console.error(err));
+
+      const interval = setInterval(() => {
+        updateOnlinePresence({
+          uid: authUid,
+          email: authEmail || user.email,
+          displayName: user.name,
+          photoURL: user.avatar,
+        }, activeView).catch(err => console.error(err));
+      }, 30000);
+
+      return () => clearInterval(interval);
+    }
+  }, [authUid, authEmail, user, activeView]);
 
   // Protected Route Check Handler: Requires authentication for all workspace views
   const handleSelectNavView = (view: string) => {
@@ -396,15 +461,33 @@ export default function App() {
     setTimetableSlots(prev => [...prev, newSlot]);
   };
 
-  const handleDeleteTimetableSlot = (slotId: string) => {
-    setTimetableSlots(prev => prev.filter(s => s.id !== slotId));
+  const handleUpdateTimetableSlot = (slotId: string, slotData: Partial<TimetableSlot>) => {
+    setTimetableSlots(prev => prev.map(s => s.id === slotId ? { ...s, ...slotData } : s));
   };
 
-  const handleLogAttendance = (logData: Omit<AttendanceLog, 'id' | 'timestamp'>) => {
+  const handleDeleteTimetableSlot = (slotId: string) => {
+    setTimetableSlots(prev => prev.filter(s => s.id !== slotId));
+    setAttendanceLogs(prev => prev.filter(l => l.slotId !== slotId));
+  };
+
+  const handleDeleteMultipleTimetableSlots = (slotIds: string[]) => {
+    const idSet = new Set(slotIds);
+    setTimetableSlots(prev => prev.filter(s => !idSet.has(s.id)));
+    setAttendanceLogs(prev => prev.filter(l => !idSet.has(l.slotId)));
+  };
+
+  const handleLogAttendance = (logData: Omit<AttendanceLog, 'id' | 'timestamp'> & { status?: AttendanceStatus | null }) => {
     const existingIndex = attendanceLogs.findIndex(
       l => l.slotId === logData.slotId && l.date === logData.date
     );
     const timestamp = new Date().toISOString();
+
+    if (!logData.status) {
+      if (existingIndex >= 0) {
+        setAttendanceLogs(prev => prev.filter((_, idx) => idx !== existingIndex));
+      }
+      return;
+    }
 
     if (existingIndex >= 0) {
       const updated = [...attendanceLogs];
@@ -416,11 +499,43 @@ export default function App() {
       setAttendanceLogs(updated);
     } else {
       const newLog: AttendanceLog = {
-        ...logData,
+        date: logData.date,
+        slotId: logData.slotId,
+        subjectId: logData.subjectId,
+        status: logData.status,
         id: `att_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         timestamp,
       };
       setAttendanceLogs(prev => [...prev, newLog]);
+    }
+  };
+
+  const handleClearDayAttendance = (date: string) => {
+    setAttendanceLogs(prev => prev.filter(log => log.date !== date));
+  };
+
+  const handleManualAdjustAttendance = (subjectId: string, addAttended: number, addConducted: number) => {
+    const timestamp = new Date().toISOString();
+    const newLogs: AttendanceLog[] = [];
+    const today = new Date();
+
+    for (let i = 0; i < addConducted; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (i + 1) * 7);
+      const dateStr = d.toISOString().split('T')[0];
+      const isAttended = i < addAttended;
+      newLogs.push({
+        id: `manual_att_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 5)}`,
+        date: dateStr,
+        slotId: `manual_slot_${subjectId}_${i}`,
+        subjectId,
+        status: isAttended ? 'present' : 'absent',
+        timestamp,
+      });
+    }
+
+    if (newLogs.length > 0) {
+      setAttendanceLogs(prev => [...prev, ...newLogs]);
     }
   };
 
@@ -446,6 +561,25 @@ export default function App() {
       return updated;
     });
   };
+
+  useEffect(() => {
+    if (attendanceLogs.length === 0) return;
+    setSubjects(prevSubjects => {
+      let changed = false;
+      const next = prevSubjects.map(sub => {
+        const subLogs = attendanceLogs.filter(l => l.subjectId === sub.id && (l.status === 'present' || l.status === 'absent'));
+        if (subLogs.length === 0) return sub;
+        const attended = subLogs.filter(l => l.status === 'present').length;
+        const pct = Math.round((attended / subLogs.length) * 100);
+        if (sub.attendancePercent !== pct) {
+          changed = true;
+          return { ...sub, attendancePercent: pct };
+        }
+        return sub;
+      });
+      return changed ? next : prevSubjects;
+    });
+  }, [attendanceLogs]);
 
   // Integration Handlers: AI Study Planner <-> Revision Planner
   const handleStudySessionCompleted = (session: {
@@ -533,6 +667,52 @@ export default function App() {
   };
 
   const activeSubject = subjects.find(s => s.id === activeSubjectId) || subjects[0];
+  const isUserAdmin = isAdmin(authEmail || user.email);
+
+  const handleSaveProfile = async (updatedData: { displayName: string; major?: string; semester?: string; targetGpa?: number; avatar?: string }) => {
+    setUser(prev => ({
+      ...prev,
+      name: updatedData.displayName || prev.name,
+      major: updatedData.major || prev.major,
+      semester: updatedData.semester || prev.semester,
+      targetGpa: updatedData.targetGpa !== undefined ? updatedData.targetGpa : prev.targetGpa,
+      avatar: updatedData.avatar || prev.avatar,
+    }));
+
+    const uidToUse = authUid || user.id || 'usr_default';
+
+    const profileData = {
+      displayName: updatedData.displayName,
+      name: updatedData.displayName,
+      email: authEmail || user.email,
+      major: updatedData.major || user.major,
+      semester: updatedData.semester || user.semester,
+      targetCgpa: updatedData.targetGpa !== undefined ? updatedData.targetGpa : user.targetGpa,
+      photoURL: updatedData.avatar || user.avatar,
+      avatar: updatedData.avatar || user.avatar,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveProfileToProfilesCollection(uidToUse, profileData);
+
+    await updateUserProfileDoc(uidToUse, {
+      displayName: updatedData.displayName,
+      email: authEmail || user.email,
+      major: updatedData.major || user.major,
+      semester: updatedData.semester || user.semester,
+      targetCgpa: updatedData.targetGpa !== undefined ? updatedData.targetGpa : user.targetGpa,
+      photoURL: updatedData.avatar || user.avatar,
+    });
+
+    if (uidToUse) {
+      updateOnlinePresence({
+        uid: uidToUse,
+        email: authEmail || user.email,
+        displayName: updatedData.displayName,
+        photoURL: updatedData.avatar || user.avatar,
+      }, activeView).catch(err => console.error(err));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#FBFBF9] text-[#1A1A1A] font-sans selection:bg-[#A68942]/20 selection:text-[#1A1A1A] flex flex-col">
@@ -547,20 +727,22 @@ export default function App() {
           setAuthRequiredMsg(null);
           setIsAuthOpen(true);
         }}
+        onOpenEditProfile={() => setIsEditProfileOpen(true)}
         notifications={notifications}
         onMarkNotificationsRead={handleMarkNotificationsRead}
         authUid={authUid}
+        onOpenAdmin={isUserAdmin ? () => setIsAdminAllowlistOpen(true) : undefined}
       />
 
       {/* Main Workspace Layout */}
-      {activeView === 'homepage' ? (
+      {activeView === 'homepage' && !authUid ? (
         <Homepage onLaunchApp={() => handleSelectNavView('dashboard')} />
       ) : (
         <div className="flex-1 flex overflow-hidden">
           
           {/* Left Navigation Sidebar */}
           <Sidebar
-            activeView={activeView}
+            activeView={activeView === 'homepage' ? 'dashboard' : activeView}
             setActiveView={handleSelectNavView}
             subjects={subjects}
             activeSubjectId={activeSubjectId}
@@ -570,135 +752,164 @@ export default function App() {
 
           {/* Main Content View Container */}
           <main className="flex-1 overflow-y-auto bg-[#FBFBF9]">
-            {activeView === 'dashboard' && (
-              <Dashboard
-                user={user}
-                subjects={subjects}
-                notes={notes}
-                flashcards={flashcards}
-                quizzes={quizzes}
-                events={events}
-                analytics={analytics}
-                authUid={authUid}
-                setActiveView={handleSelectNavView}
-                setActiveSubjectId={setActiveSubjectId}
-                onOpenAddSubject={() => setIsAddSubjectOpen(true)}
-              />
-            )}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeView === 'subject' ? `subject-${activeSubjectId}` : activeView}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="w-full min-h-full"
+              >
+                {(activeView === 'dashboard' || activeView === 'homepage') && (
+                  <Dashboard
+                    user={user}
+                    subjects={subjects}
+                    notes={notes}
+                    flashcards={flashcards}
+                    quizzes={quizzes}
+                    events={events}
+                    analytics={analytics}
+                    authUid={authUid}
+                    setActiveView={handleSelectNavView}
+                    setActiveSubjectId={setActiveSubjectId}
+                    onOpenAddSubject={() => setIsAddSubjectOpen(true)}
+                    onOpenAuth={() => setIsAuthOpen(true)}
+                  />
+                )}
 
-            {activeView === 'timetable' && (
-              <TimetableAttendanceView
-                subjects={subjects}
-                timetableSlots={timetableSlots}
-                attendanceLogs={attendanceLogs}
-                onAddTimetableSlot={handleAddTimetableSlot}
-                onDeleteTimetableSlot={handleDeleteTimetableSlot}
-                onLogAttendance={handleLogAttendance}
-                onBatchLogAttendance={handleBatchLogAttendance}
-              />
-            )}
+                {activeView === 'timetable' && (
+                  <TimetableAttendanceView
+                    subjects={subjects}
+                    timetableSlots={timetableSlots}
+                    attendanceLogs={attendanceLogs}
+                    onAddTimetableSlot={handleAddTimetableSlot}
+                    onUpdateTimetableSlot={handleUpdateTimetableSlot}
+                    onDeleteTimetableSlot={handleDeleteTimetableSlot}
+                    onDeleteMultipleTimetableSlots={handleDeleteMultipleTimetableSlots}
+                    onLogAttendance={handleLogAttendance}
+                    onBatchLogAttendance={handleBatchLogAttendance}
+                    onManualAdjustAttendance={handleManualAdjustAttendance}
+                    onClearDayAttendance={handleClearDayAttendance}
+                  />
+                )}
 
-            {activeView === 'subject' && (
-              activeSubject ? (
-                <SubjectWorkspace
-                  subject={activeSubject}
-                  notes={notes}
-                  pdfs={pdfs}
-                  flashcards={flashcards}
-                  quizzes={quizzes}
-                  assignments={assignments}
-                  onAddNote={handleAddNote}
-                  onAddPDF={handleAddPDF}
-                  onAddFlashcard={handleAddFlashcard}
-                  onBack={() => handleSelectNavView('dashboard')}
-                />
-              ) : (
-                <div className="p-8 text-center max-w-md mx-auto my-12 bg-white rounded-2xl border border-[#EAE7E0] shadow-xs">
-                  <p className="text-zinc-600 mb-4 font-medium text-sm">No subjects created yet. Add your first subject to start taking notes, uploading PDFs, and building flashcards.</p>
-                  <button
-                    onClick={() => setIsAddSubjectOpen(true)}
-                    className="px-4 py-2 bg-[#1A1A1A] text-white rounded-xl text-xs font-semibold shadow-xs hover:bg-[#333333] transition-colors"
-                  >
-                    + Add New Subject
-                  </button>
-                </div>
-              )
-            )}
+                {activeView === 'subject' && (
+                  activeSubject ? (
+                    <SubjectWorkspace
+                      subject={activeSubject}
+                      notes={notes}
+                      pdfs={pdfs}
+                      flashcards={flashcards}
+                      quizzes={quizzes}
+                      assignments={assignments}
+                      onAddNote={handleAddNote}
+                      onAddPDF={handleAddPDF}
+                      onAddFlashcard={handleAddFlashcard}
+                      onBack={() => handleSelectNavView('dashboard')}
+                    />
+                  ) : (
+                    <div className="p-8 text-center max-w-md mx-auto my-12 bg-white rounded-2xl border border-[#EAE7E0] shadow-xs">
+                      <p className="text-zinc-600 mb-4 font-medium text-sm">No subjects created yet. Add your first subject to start taking notes, uploading PDFs, and building flashcards.</p>
+                      <button
+                        onClick={() => setIsAddSubjectOpen(true)}
+                        className="px-4 py-2 bg-[#1A1A1A] text-white rounded-xl text-xs font-semibold shadow-xs hover:bg-[#333333] transition-colors"
+                      >
+                        + Add New Subject
+                      </button>
+                    </div>
+                  )
+                )}
 
-            {activeView === 'ai-tutor' && (
-              <AITutorView
-                subjects={subjects}
-                pdfs={pdfs}
-                onAddPdf={handleAddPDF}
-                onDeletePdf={handleDeletePDF}
-                user={user}
-                initialSubjectId={activeSubjectId || undefined}
-              />
-            )}
+                {activeView === 'ai-tutor' && (
+                  <AITutorView
+                    subjects={subjects}
+                    pdfs={pdfs}
+                    onAddPdf={handleAddPDF}
+                    onDeletePdf={handleDeletePDF}
+                    user={user}
+                    initialSubjectId={activeSubjectId || undefined}
+                  />
+                )}
 
-            {activeView === 'study-planner' && (
-              <StudyPlannerView
-                user={user}
-                subjects={subjects}
-                pdfs={pdfs}
-                onAddPdf={handleAddPDF}
-                onDeletePdf={handleDeletePDF}
-                authUid={authUid}
-                onStudySessionCompleted={handleStudySessionCompleted}
-              />
-            )}
+                {activeView === 'study-planner' && (
+                  <StudyPlannerView
+                    user={user}
+                    subjects={subjects}
+                    pdfs={pdfs}
+                    onAddPdf={handleAddPDF}
+                    onDeletePdf={handleDeletePDF}
+                    authUid={authUid}
+                    onStudySessionCompleted={handleStudySessionCompleted}
+                  />
+                )}
 
-            {activeView === 'flashcards' && (
-              <FlashcardView
-                subjects={subjects}
-                flashcards={flashcards}
-                onAddFlashcard={handleAddFlashcard}
-                onUpdateFlashcardReview={handleUpdateFlashcardReview}
-              />
-            )}
+                {activeView === 'flashcards' && (
+                  <FlashcardView
+                    subjects={subjects}
+                    flashcards={flashcards}
+                    pdfs={pdfs}
+                    onAddPdf={handleAddPDF}
+                    onDeletePdf={handleDeletePDF}
+                    onAddFlashcard={handleAddFlashcard}
+                    onUpdateFlashcardReview={handleUpdateFlashcardReview}
+                  />
+                )}
 
-            {activeView === 'quiz-generator' && (
-              <QuizView
-                subjects={subjects}
-                quizzes={quizzes}
-                onSaveQuizResult={handleSaveQuizResult}
-                onAddFlashcard={handleAddFlashcard}
-              />
-            )}
+                {activeView === 'quiz-generator' && (
+                  <QuizView
+                    subjects={subjects}
+                    quizzes={quizzes}
+                    pdfs={pdfs}
+                    onAddPdf={handleAddPDF}
+                    onDeletePdf={handleDeletePDF}
+                    onSaveQuizResult={handleSaveQuizResult}
+                    onAddFlashcard={handleAddFlashcard}
+                  />
+                )}
 
-            {activeView === 'pdf-brain' && (
-              <PDFBrainView
-                subjects={subjects}
-                pdfs={pdfs}
-                onAddPDF={handleAddPDF}
-                onDeletePDF={handleDeletePDF}
-              />
-            )}
+                {activeView === 'pdf-brain' && (
+                  <PDFBrainView
+                    subjects={subjects}
+                    pdfs={pdfs}
+                    onAddPDF={handleAddPDF}
+                    onDeletePDF={handleDeletePDF}
+                  />
+                )}
 
-            {activeView === 'calendar' && (
-              <RevisionPlannerView
-                subjects={subjects}
-                revisionTasks={revisionTasks}
-                onToggleRevisionTask={handleToggleRevisionTask}
-                onAddRevisionTasks={handleAddRevisionTasks}
-                onDeleteTopicGroup={handleDeleteTopicGroup}
-                onNavigateToAITutor={(topic, subjectId) => {
-                  setActiveSubjectId(subjectId);
-                  handleSelectNavView('ai-tutor');
-                }}
-              />
-            )}
+                {activeView === 'calendar' && (
+                  <RevisionPlannerView
+                    subjects={subjects}
+                    revisionTasks={revisionTasks}
+                    onToggleRevisionTask={handleToggleRevisionTask}
+                    onAddRevisionTasks={handleAddRevisionTasks}
+                    onDeleteTopicGroup={handleDeleteTopicGroup}
+                    onNavigateToAITutor={(topic, subjectId) => {
+                      setActiveSubjectId(subjectId);
+                      handleSelectNavView('ai-tutor');
+                    }}
+                  />
+                )}
 
-            {activeView === 'writing-assistant' && (
-              <WritingAssistantView />
-            )}
+                {activeView === 'writing-assistant' && (
+                  <WritingAssistantView />
+                )}
 
-            {activeView === 'analytics' && (
-              <AnalyticsView
-                user={user}
-                analytics={analytics}
-              />
-            )}
+                {activeView === 'analytics' && (
+                  <AnalyticsView
+                    user={user}
+                    analytics={analytics}
+                  />
+                )}
+
+                {activeView === 'admin' && (
+                  <AdminDashboard
+                    onOpenAllowlistModal={() => setIsAdminAllowlistOpen(true)}
+                    setActiveView={handleSelectNavView}
+                  />
+                )}
+              </motion.div>
+            </AnimatePresence>
           </main>
 
         </div>
@@ -726,11 +937,26 @@ export default function App() {
           setAuthRequiredMsg(null);
         }}
         user={user}
-        onUpdateUser={(updated) => setUser(prev => ({ ...prev, ...updated }))}
+        onUpdateUser={(updated) => {
+          setUser(prev => {
+            const newUser = { ...prev, ...updated };
+            if (authUid) {
+              updateUserProfileDoc(authUid, {
+                displayName: newUser.name,
+                email: newUser.email,
+                major: newUser.major,
+                semester: newUser.semester,
+                targetCgpa: newUser.targetGpa,
+                photoURL: newUser.avatar,
+              }).catch(err => console.error("Error updating user profile doc in Firestore:", err));
+            }
+            return newUser;
+          });
+        }}
         authUid={authUid}
         authEmail={authEmail}
         requiredMessage={authRequiredMsg}
-        onOpenAdmin={() => setIsAdminAllowlistOpen(true)}
+        onOpenAdmin={isUserAdmin ? () => setIsAdminAllowlistOpen(true) : undefined}
         onAuthSuccess={() => {
           setActiveView('dashboard');
         }}
@@ -740,12 +966,19 @@ export default function App() {
         isOpen={isAccessRestrictedOpen}
         onClose={() => setIsAccessRestrictedOpen(false)}
         attemptedEmail={unauthorizedAttemptEmail}
-        onOpenAdmin={() => setIsAdminAllowlistOpen(true)}
+        onOpenAdmin={isUserAdmin || isAdmin(unauthorizedAttemptEmail) ? () => setIsAdminAllowlistOpen(true) : undefined}
       />
 
       <AdminAllowlistModal
         isOpen={isAdminAllowlistOpen}
         onClose={() => setIsAdminAllowlistOpen(false)}
+      />
+
+      <EditProfileModal
+        isOpen={isEditProfileOpen}
+        onClose={() => setIsEditProfileOpen(false)}
+        user={user}
+        onSaveProfile={handleSaveProfile}
       />
 
       {/* Add New Subject Modal */}

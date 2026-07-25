@@ -123,7 +123,7 @@ export const PDFBrainView: React.FC<PDFBrainViewProps> = ({
               PDF & Document Brain
             </h1>
             <p className="text-xs text-zinc-600">
-              Upload local PDFs/PowerPoints, view actual visual pages, extract equations & run AI analysis
+              Upload local PDFs, Word & PowerPoint documents, view actual visual pages, extract equations & run AI analysis
             </p>
           </div>
         </div>
@@ -134,7 +134,7 @@ export const PDFBrainView: React.FC<PDFBrainViewProps> = ({
             type="file"
             ref={fileInputRef}
             onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-            accept=".pdf,.ppt,.pptx,.txt"
+            accept=".pdf,.ppt,.pptx,.txt,.doc,.docx"
             className="hidden"
           />
 

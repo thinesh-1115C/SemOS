@@ -10,6 +10,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdminEmail() {
+      return isSignedIn() && request.auth.token.email == 'thinesh10048@gmail.com';
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -19,7 +23,27 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Online users presence collection
+    match /online_users/{userId} {
+      allow write: if isOwner(userId) && isValidId(userId);
+      allow read, list: if isAdminEmail() || isOwner(userId);
+    }
+
+    // Settings / allowlist configuration document
+    match /settings/allowlist {
+      allow read, write: if true;
+    }
+
+    // Access requests collection
+    match /access_requests/{requestId} {
+      allow create, read, list, update, delete: if true;
+    }
+
     // User profile and user subcollections
+    match /profiles/{userId} {
+      allow read, write, delete: if isOwner(userId);
+    }
+
     match /users/{userId} {
       allow get, write, delete: if isOwner(userId);
       allow list: if false;

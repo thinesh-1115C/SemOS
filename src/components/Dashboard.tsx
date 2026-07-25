@@ -7,7 +7,7 @@ import {
 import { 
   Sparkles, Flame, Trophy, Clock, CheckCircle2, AlertTriangle, 
   ArrowRight, Plus, Bot, FileUp, Layers, HelpCircle, FileText, 
-  Calendar as CalendarIcon, CalendarCheck, BookOpen, Sigma, Zap, Code, Cpu, Trash2, RefreshCw
+  Calendar as CalendarIcon, CalendarCheck, BookOpen, Sigma, Zap, Code, Cpu, Trash2, RefreshCw, Edit3
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -22,6 +22,7 @@ interface DashboardProps {
   setActiveView: (view: string) => void;
   setActiveSubjectId: (id: string | null) => void;
   onOpenAddSubject: () => void;
+  onOpenAuth?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -36,6 +37,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   setActiveView,
   setActiveSubjectId,
   onOpenAddSubject,
+  onOpenAuth,
 }) => {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -91,11 +93,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#1A1A1A] text-[#FBFBF9]">
               {user.semester} • {user.major}
             </span>
-            <span className="text-xs text-zinc-500 font-mono">Target GPA: {user.targetGpa}</span>
           </div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1A1A] tracking-tight">
-            Welcome back, {user.name.split(' ')[0]} 👋
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#1A1A1A] tracking-tight">
+              Welcome back, {user.name} 👋
+            </h1>
+            {onOpenAuth && (
+              <button
+                onClick={onOpenAuth}
+                className="p-1.5 rounded-xl hover:bg-[#EAE7E0] text-zinc-500 hover:text-[#A68942] transition-colors flex items-center gap-1 text-xs font-semibold border border-[#EAE7E0] bg-[#FBFBF9]"
+                title="Edit Profile Name & Settings"
+                id="edit-profile-name-dashboard-btn"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-[#A68942]" />
+                <span className="hidden sm:inline text-zinc-600">Edit Profile</span>
+              </button>
+            )}
+          </div>
           <p className="text-zinc-600 text-xs sm:text-sm mt-1">
             Your academic operating system is online. Here is today's learning report.
           </p>

@@ -1,13 +1,18 @@
-import React, { useState } from 'react';
-import { Subject, Quiz, QuizQuestion, Flashcard } from '../types';
+import React, { useState, useRef } from 'react';
+import { Subject, Quiz, QuizQuestion, Flashcard, PDFDocument } from '../types';
+import { FileLibraryModal } from './FileLibraryModal';
 import { 
   HelpCircle, Sparkles, CheckCircle2, XCircle, Clock, 
-  Award, ArrowRight, RefreshCw, Layers, Plus
+  Award, ArrowRight, RefreshCw, Layers, Plus,
+  Upload, FileText, X, FolderOpen, Loader2
 } from 'lucide-react';
 
 interface QuizViewProps {
   subjects: Subject[];
   quizzes: Quiz[];
+  pdfs?: PDFDocument[];
+  onAddPdf?: (pdf: Omit<PDFDocument, 'id' | 'uploadDate'>) => PDFDocument | void;
+  onDeletePdf?: (pdfId: string) => void;
   onSaveQuizResult: (quiz: Quiz) => void;
   onAddFlashcard: (card: Omit<Flashcard, 'id' | 'nextReviewDate' | 'intervalDays' | 'reviewCount' | 'easeFactor'>) => void;
 }
@@ -15,14 +20,27 @@ interface QuizViewProps {
 export const QuizView: React.FC<QuizViewProps> = ({
   subjects,
   quizzes,
+  pdfs = [],
+  onAddPdf,
+  onDeletePdf,
   onSaveQuizResult,
   onAddFlashcard,
 }) => {
   // Generator options
-  const [selectedSubjectId, setSelectedSubjectId] = useState(subjects[0]?.id || '');
+  const [selectedSubjectId, setSelectedSubjectId] = useState(subjects[0]?.id || 'custom');
+  const [customSubjectCode, setCustomSubjectCode] = useState('');
+  const [customSubjectName, setCustomSubjectName] = useState('');
   const [topic, setTopic] = useState('');
   const [questionCount, setQuestionCount] = useState(5);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Attached File State for Quiz Generator
+  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
+  const [attachedFileText, setAttachedFileText] = useState<string>('');
+  const [isParsingFile, setIsParsingFile] = useState(false);
+  const [isLibraryModalOpen, setIsLibraryModalOpen] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active quiz session
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
@@ -30,18 +48,66 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [convertedFlashcards, setConvertedFlashcards] = useState<Record<string, boolean>>({});
 
+  const handleFileUpload = async (file: File) => {
+    setIsParsingFile(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/parse-document', {
+        method: 'POST',
+        body: formData,
+      });
+
+      let extractedText = '';
+      if (res.ok) {
+        const data = await res.json();
+        extractedText = data.extractedText || '';
+      } else {
+        extractedText = await file.text();
+      }
+
+      setAttachedFileName(file.name);
+      setAttachedFileText(extractedText);
+
+      if (onAddPdf) {
+        onAddPdf({
+          subjectId: selectedSubjectId !== 'custom' ? selectedSubjectId : 'general',
+          title: file.name,
+          fileSize: `${(file.size / 1024).toFixed(1)} KB`,
+          pageCount: 1,
+          extractedText,
+        });
+      }
+    } catch {
+      try {
+        const text = await file.text();
+        setAttachedFileName(file.name);
+        setAttachedFileText(text);
+      } catch (err) {
+        console.error('File read error:', err);
+      }
+    } finally {
+      setIsParsingFile(false);
+    }
+  };
+
   const handleGenerateQuiz = async () => {
     if (!topic.trim() || isGenerating) return;
     setIsGenerating(true);
 
     try {
       const subjectObj = subjects.find(s => s.id === selectedSubjectId);
+      const subjectDisplayName = selectedSubjectId === 'custom'
+        ? `${customSubjectCode || 'GEN'} ${customSubjectName || 'General Subject'}`
+        : subjectObj?.name || 'General Computer Science';
+
       const res = await fetch('/api/ai/generate-quiz', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subject: subjectObj?.name || 'General Computer Science',
+          subject: subjectDisplayName,
           topic,
+          sourceText: attachedFileText || undefined,
           questionCount,
         }),
       });
@@ -50,7 +116,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
       if (data.questions && Array.isArray(data.questions)) {
         const newQuiz: Quiz = {
           id: Date.now().toString(),
-          subjectId: selectedSubjectId,
+          subjectId: selectedSubjectId !== 'custom' ? selectedSubjectId : 'general',
           title: data.quizTitle || `${topic} Mastery Quiz`,
           topic,
           questions: data.questions,
@@ -126,37 +192,39 @@ export const QuizView: React.FC<QuizViewProps> = ({
       {/* Quiz Generator Form */}
       {!activeQuiz && (
         <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
-          <h2 className="font-bold text-sm text-purple-300 flex items-center gap-2">
-            <Sparkles className="w-4 h-4" />
-            <span>Generate New Assessment Quiz</span>
-          </h2>
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h2 className="font-bold text-sm text-purple-300 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span>Generate New Assessment Quiz from Notes or File</span>
+            </h2>
+            <span className="text-[11px] text-purple-400 font-mono font-bold bg-purple-500/10 px-2.5 py-1 rounded-full border border-purple-500/20">
+              AI Quiz Engine
+            </span>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Subject</label>
+              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Select / Type Subject</label>
               <select
                 value={selectedSubjectId}
                 onChange={(e) => setSelectedSubjectId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold"
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
               >
-                {subjects.length === 0 ? (
-                  <option value="">General Subject</option>
-                ) : (
-                  subjects.map((s) => (
-                    <option key={s.id} value={s.id}>{(s?.name || '').split('(')[0]}</option>
-                  ))
-                )}
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.id}>{s.code} - {(s?.name || '').split('(')[0]}</option>
+                ))}
+                <option value="custom">+ Type Custom Subject & Code</option>
               </select>
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Topic / Unit</label>
+              <label className="text-[11px] font-semibold text-slate-400 block mb-1">Topic / Unit Name</label>
               <input
                 type="text"
                 placeholder="e.g. Vector Calculus Green's Theorem"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold"
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
               />
             </div>
 
@@ -165,13 +233,114 @@ export const QuizView: React.FC<QuizViewProps> = ({
               <select
                 value={questionCount}
                 onChange={(e) => setQuestionCount(Number(e.target.value))}
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold"
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
               >
                 <option value={3}>3 Questions</option>
                 <option value={5}>5 Questions</option>
                 <option value={10}>10 Questions</option>
               </select>
             </div>
+          </div>
+
+          {selectedSubjectId === 'custom' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-950 border border-slate-800">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Custom Subject Code</label>
+                <input
+                  type="text"
+                  placeholder="e.g. ECE401, MATH301"
+                  value={customSubjectCode}
+                  onChange={(e) => setCustomSubjectCode(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Custom Subject Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Microprocessors & Interfacing"
+                  value={customSubjectName}
+                  onChange={(e) => setCustomSubjectName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* File Upload / Attachment Area */}
+          <div className="space-y-2">
+            <label className="text-[11px] font-semibold text-slate-400 block">
+              Attach Source Document / PDF (Optional)
+            </label>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".pdf,.ppt,.pptx,.txt,.doc,.docx"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleFileUpload(file);
+              }}
+            />
+
+            {attachedFileName ? (
+              <div className="p-3 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-between text-xs text-purple-200">
+                <div className="flex items-center gap-2.5 overflow-hidden">
+                  <div className="p-2 rounded-xl bg-purple-500/20 text-purple-400">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div className="truncate">
+                    <p className="font-bold truncate">{attachedFileName}</p>
+                    <p className="text-[10px] text-purple-300/70 font-mono">
+                      {attachedFileText ? `${attachedFileText.length} characters extracted` : 'Document loaded'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachedFileName(null);
+                    setAttachedFileText('');
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-purple-500/20 text-purple-400 transition-colors shrink-0"
+                  title="Remove Attached File"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isParsingFile}
+                  className="p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-dashed border-slate-700 hover:border-purple-500/50 flex items-center justify-center gap-2 text-xs text-slate-300 transition-all group"
+                >
+                  {isParsingFile ? (
+                    <>
+                      <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                      <span>Reading Document...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+                      <span>Upload File from Device (.pdf, .txt)</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsLibraryModalOpen(true)}
+                  className="p-3 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 flex items-center justify-center gap-2 text-xs text-slate-300 transition-all group"
+                >
+                  <FolderOpen className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+                  <span>Pick from Inbuilt Library ({pdfs.length})</span>
+                </button>
+              </div>
+            )}
           </div>
 
           <button
@@ -182,17 +351,34 @@ export const QuizView: React.FC<QuizViewProps> = ({
             {isGenerating ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>Generating Quiz Questions...</span>
+                <span>Generating {questionCount} Quiz Questions...</span>
               </>
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                <span>Generate Test Paper</span>
+                <span>Generate {questionCount}-Question AI Quiz</span>
               </>
             )}
           </button>
         </div>
       )}
+
+      {/* File Library Modal for Picking PDFs */}
+      <FileLibraryModal
+        isOpen={isLibraryModalOpen}
+        onClose={() => setIsLibraryModalOpen(false)}
+        pdfs={pdfs}
+        subjects={subjects}
+        onSelectPdf={(pdf) => {
+          setAttachedFileName(pdf.title);
+          setAttachedFileText(pdf.extractedText || '');
+          setIsLibraryModalOpen(false);
+        }}
+        onAddPdf={onAddPdf || (() => {})}
+        onDeletePdf={onDeletePdf}
+        title="Select File for Quiz Generator"
+        subtitle="Choose a document from your library to generate tailored MCQs and short-answer questions"
+      />
 
       {/* Active Quiz Player */}
       {activeQuiz && (

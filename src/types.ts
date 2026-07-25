@@ -110,8 +110,12 @@ export interface AssignmentTask {
 export interface CalendarEvent {
   id: string;
   subjectId?: string;
+  customSubjectName?: string;
+  customSubjectCode?: string;
   title: string;
   date: string;
+  startTime?: string; // e.g. "09:00 AM" or "09:00"
+  endTime?: string;   // e.g. "10:30 AM" or "10:30"
   type: 'exam' | 'assignment' | 'lab' | 'revision' | 'study_session';
   completed: boolean;
 }
@@ -148,6 +152,8 @@ export type AttendanceStatus = 'present' | 'absent' | 'cancelled';
 export interface TimetableSlot {
   id: string;
   subjectId: string;
+  customSubjectName?: string;
+  customSubjectCode?: string;
   day: DayOfWeek;
   startTime: string; // e.g. "09:00 AM"
   endTime: string;   // e.g. "10:00 AM"

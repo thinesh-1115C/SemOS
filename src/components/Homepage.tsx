@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'motion/react';
 import { 
   Sparkles, BookOpen, Bot, Layers, Calendar, Trophy, Zap, 
   CheckCircle2, ArrowRight, ShieldCheck, ChevronDown, ChevronUp,
@@ -104,7 +105,7 @@ export const Homepage: React.FC<HomepageProps> = ({ onLaunchApp }) => {
           </h1>
 
           <p className="max-w-3xl mx-auto text-lg sm:text-xl text-zinc-600 font-normal leading-relaxed mb-8">
-            Your AI-Powered Academic OS. Learn concepts step-by-step, organize subject materials, generate flashcards, master Feynman technique, and track your GPA journey.
+            Your AI-Powered Academic OS. Learn concepts step-by-step, organize subject materials, generate flashcards, master Feynman technique, and improve your GPA.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
@@ -130,15 +131,18 @@ export const Homepage: React.FC<HomepageProps> = ({ onLaunchApp }) => {
               Combining the superpowers of 7 essential student tools into 1 unified platform
             </p>
             <div className="flex flex-wrap justify-center gap-2.5">
-              {appsCombined.map((app) => (
-                <div 
+              {appsCombined.map((app, index) => (
+                <motion.div 
                   key={app.name}
+                  initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.4, delay: index * 0.07, ease: [0.16, 1, 0.3, 1] }}
                   className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#F6F4F0] border border-[#EAE7E0] text-xs font-medium text-[#1A1A1A] shadow-xs hover:border-[#A68942]/50 transition-colors"
                 >
                   <span className="text-base">{app.icon}</span>
                   <span className="font-bold text-[#1A1A1A]">{app.name}</span>
                   <span className="text-zinc-500 text-[11px]">• {app.role}</span>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -231,9 +235,12 @@ export const Homepage: React.FC<HomepageProps> = ({ onLaunchApp }) => {
             { step: '03', title: 'Auto-Generate Flashcards', desc: 'Convert notes and PDF chapters into spaced repetition flashcards automatically.' },
             { step: '04', title: 'Master Forgetting Curve', desc: 'Follow automated revision reminders so you retain 95%+ of material before exam day.' },
           ].map((item) => (
-            <div key={item.step} className="p-5 rounded-2xl bg-[#F6F4F0] border border-[#EAE7E0] relative">
-              <span className="text-4xl font-serif font-bold text-[#A68942]/40 block mb-3">{item.step}</span>
-              <h3 className="font-serif text-base font-bold text-[#1A1A1A] mb-2">{item.title}</h3>
+            <div 
+              key={item.step} 
+              className="p-5 rounded-2xl bg-[#F6F4F0] hover:bg-[#FFFFFF] border border-[#EAE7E0] hover:border-[#A68942]/50 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-300 group relative"
+            >
+              <span className="text-4xl font-serif font-bold text-[#A68942]/40 group-hover:text-[#A68942]/80 transition-colors block mb-3">{item.step}</span>
+              <h3 className="font-serif text-base font-bold text-[#1A1A1A] group-hover:text-[#A68942] transition-colors mb-2">{item.title}</h3>
               <p className="text-xs text-zinc-600 leading-relaxed">{item.desc}</p>
             </div>
           ))}

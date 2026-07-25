@@ -45,11 +45,22 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({ content, cla
               {children}
             </h3>
           ),
-          p: ({ children }) => (
-            <p className="mb-2.5 text-[#1A1A1A] leading-relaxed">
-              {children}
-            </p>
-          ),
+          p: ({ children }) => {
+            const hasBlock = React.Children.toArray(children).some((child: any) => {
+              if (React.isValidElement(child)) {
+                return child.type === 'div' || child.type === 'pre' || child.type === 'table';
+              }
+              return false;
+            });
+            if (hasBlock) {
+              return <div className="mb-2.5 text-[#1A1A1A] leading-relaxed">{children}</div>;
+            }
+            return (
+              <p className="mb-2.5 text-[#1A1A1A] leading-relaxed">
+                {children}
+              </p>
+            );
+          },
           ul: ({ children }) => (
             <ul className="list-none pl-0 my-2.5 space-y-1.5">
               {children}

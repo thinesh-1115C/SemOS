@@ -21,17 +21,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startTime, setStartTime] = useState('09:00 AM');
+  const [endTime, setEndTime] = useState('10:30 AM');
   const [type, setType] = useState<CalendarEvent['type']>('revision');
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id || '');
+  const [selectedSubjectId, setSelectedSubjectId] = useState(subjects[0]?.id || 'custom');
+  const [customSubjectCode, setCustomSubjectCode] = useState('');
+  const [customSubjectName, setCustomSubjectName] = useState('');
 
   const [aiSchedule, setAiSchedule] = useState<string | null>(null);
 
   const handleCreateEvent = () => {
     if (!title.trim()) return;
     onAddEvent({
-      subjectId,
+      subjectId: selectedSubjectId !== 'custom' ? selectedSubjectId : undefined,
+      customSubjectCode: selectedSubjectId === 'custom' ? customSubjectCode || 'GEN101' : undefined,
+      customSubjectName: selectedSubjectId === 'custom' ? customSubjectName || 'General Subject' : undefined,
       title,
       date,
+      startTime,
+      endTime,
       type,
     });
     setTitle('');
@@ -92,36 +100,113 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
         {showAddForm && (
           <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <input
-                type="text"
-                placeholder="Event Title (e.g. Physics Midterm Exam)"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold"
-              />
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold"
-              />
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value as any)}
-                className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold"
-              >
-                <option value="exam">Exam</option>
-                <option value="assignment">Assignment</option>
-                <option value="lab">Lab Report</option>
-                <option value="revision">Forgetting Curve Revision</option>
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Event Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Physics Midterm Exam"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Event Category</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as any)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="exam">Exam</option>
+                  <option value="assignment">Assignment</option>
+                  <option value="lab">Lab Report</option>
+                  <option value="revision">Forgetting Curve Revision</option>
+                  <option value="study_session">Study Session</option>
+                </select>
+              </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowAddForm(false)} className="px-3.5 py-1.5 rounded-xl bg-slate-800 text-xs">
+
+            {/* Custom Timeslot Controls */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Start Time</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 09:00 AM"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">End Time</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 10:30 AM"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-slate-400 block mb-1">Select / Type Subject</label>
+                <select
+                  value={selectedSubjectId}
+                  onChange={(e) => setSelectedSubjectId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                >
+                  {subjects.map((s) => (
+                    <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
+                  ))}
+                  <option value="custom">+ Type Custom Subject & Code</option>
+                </select>
+              </div>
+            </div>
+
+            {selectedSubjectId === 'custom' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Subject Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. ECE401, MATH301"
+                    value={customSubjectCode}
+                    onChange={(e) => setCustomSubjectCode(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-400 block mb-1">Subject Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Embedded Systems Architecture"
+                    value={customSubjectName}
+                    onChange={(e) => setCustomSubjectName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowAddForm(false)} className="px-3.5 py-1.5 rounded-xl bg-slate-800 text-xs text-slate-300 font-semibold hover:bg-slate-700">
                 Cancel
               </button>
-              <button onClick={handleCreateEvent} className="px-4 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs">
+              <button onClick={handleCreateEvent} className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md">
                 Save Event
               </button>
             </div>
@@ -132,6 +217,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         <div className="space-y-2 pt-2">
           {events.map((ev) => {
             const subject = subjects.find(s => s.id === ev.subjectId);
+            const displayCode = subject?.code || ev.customSubjectCode || 'GEN101';
+            const displayName = subject?.name || ev.customSubjectName || '';
+
             return (
               <div
                 key={ev.id}
@@ -154,7 +242,16 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     <p className={`font-bold text-xs ${ev.completed ? 'line-through text-slate-500' : 'text-slate-100'}`}>
                       {ev.title}
                     </p>
-                    <p className="text-[10px] text-indigo-400">{subject?.code || 'General'}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-emerald-400 font-mono font-bold">{displayCode}</span>
+                      {displayName && <span className="text-[10px] text-slate-400 truncate max-w-[150px]">• {displayName}</span>}
+                      {(ev.startTime || ev.endTime) && (
+                        <span className="text-[10px] text-amber-400/90 font-mono flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                          <Clock className="w-3 h-3" />
+                          <span>{ev.startTime || '09:00 AM'}{ev.endTime ? ` - ${ev.endTime}` : ''}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
